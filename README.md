@@ -1,3 +1,3 @@
 # Ircdreams
 
-Let's try to revive this old project !
+Let's try to revive my old project
