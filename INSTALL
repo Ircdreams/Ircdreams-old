@@ -1,0 +1,62 @@
+			-- [ -> IrcDreams v2 <- ] --
+					ircu2.10.11.07+IrcDreams2
+		--< INSTALL >--
+
+Bienvenue dans le fichier d'aide à l'installation du projet IrcDreams.
+Il est conseillé de lire le fichier README avant d'effectuer les opérations de ce fichier.
+
+Sommaire :
+1) téléchargement
+2) ./configure
+3) make install
+4) ircd.conf
+5) lancement
+
+1) téléchargement
+=================
+Tapez ça dans votre shell :
+$ cvs -d:pserver:cvs@ircdreams.org:/cvsroot/Dreams co IrcDreams2
+Vous pouvez maintenant vous déplacer dans le dossier IrcDreams2 avec :
+$ cd IrcDreams2/
+
+2) ./configure
+==============
+Tapez :
+$ ./configure --prefix=<chemin où sera installé l'ircd>
+Si vous voulez installé l'ircd, par exemple, dans /home/moi/ircd, tapez ça :
+$ ./configure --prefix=/home/moi/ircd
+Si vous avez des problèmes avec cette ligne, contactez moi à bugs@ircdreams.org
+
+3) make (ou gmake sur *BSD)
+===============
+Tapez :
+$ make && make install (ou gmake && gmake install sous *BSD)
+
+4) ircd.conf
+============
+Maintenant vous allez devoir configuré votre daemon irc. Pour ce faire, tapez:
+$ cd <chemin où vous avez installé l'ircd>/lib
+Si vous l'avez installé dans /home/moi/ircd, tapez:
+$ cd /home/sex/moi/lib
+Tapez maintenant:
+$ cp example.conf ircd.conf
+Maintenant éditez depuis un éditeur tel que pico, nano, vi ou encore emacs
+IMPORTANT : Il est completement déconseillé d'editer votre configuration avec un éditeur texte de Windows !
+une alerte a été émise par les devellopeurs d'ircu: http://sourceforge.net/forum/forum.php?forum_id=249864
+
+Les indications contenues dans le fichier example.conf vous aideront à configurer.
+
+5) lancement
+============
+Tapez maintenant :
+$ cd ../bin
+$ ./ircd
+Theoriquement si vous avez bien configuré l'ircd, ça devrait marcher. Vous pouvez maintenant jouer sur votre
+tout nouveau serveur.
+
+Si vous voulez de l'aide, vous pouvez aller sur le serveur ircdreams.org salon #ircdreams
+Ou encore par mail, bugs@ircdreams.org
+
+Bonne utilisation,
+
+BuGs

@@ -1,0 +1,57 @@
+
+			-- [ -> IRCDREAMS <- ] --
+					ircu2.10.11.07+Dreams2
+		--< README >--
+
+IRC, Internet Relay Chat, est un projet datant des années 1990, crée par Jarkko Oikarinen. Repris par
+le "coder-com of Undernet", il a été améliorer pour former, à l'heure actuel, le meilleur
+IRC daemon au monde, ircu.
+
+Ce projet consite a créé un ircd tres personnalisable et tres controlable et surtout en FRANCAIS !
+Nous avons décidé de prendre la base de ircoderz pour le devellopement de notre projet.
+IrcDreams a donc appliqué divers Patch d'Asuka, de Lain, de SiRVulcaN.
+Divers fonctions des ircd Ircu, IrcProgs, Ircoxyd, Nefarious et Unreal ont été aussi appliqué.
+
+Je tiens a remercier particulierement Cesar, reed et SiRVulcaN qui m'ont autorisé à utiliser leur Patch
+
+
+INSTALLATION:
+
+	Lisez le fichier INSTALL
+
+COMPATIBILITÉ:
+
+	Cet ircd a été programmé pour supporter le protocole P10, le N2K, et les seuls services
+	compatibles avec sont SDreams, ODreams, PDreams.
+
+MISE À JOUR
+
+	Vous avez la possibilité de mettre à jour votre version d'ircoderz de deux manières:
+	- Télécharger depuis le site ircdreams la toute dernière release faite à
+	  http://www.ircdreams.org
+	  
+	- En utilisant CVS.
+		Tapez:
+		  $ make update
+
+PLUS D'INFORMATIONS
+
+	Vous pouvez obtenir plus d'informations à propos de ce daemon irc à l'adresse suivante :
+	http://www.ircdreams.org/
+
+	Vous pouvez contacter l'équipe a l'adresse suivante :
+	BuGs  <bugs@ircdreams.org> , programmeur IrcDreams
+
+	Et pour des informations sur le réseau ircdreams.org #Ircdreams http://www.ircdreams.org
+	
+REMERCIEMENTS
+
+	Bien entendu, ceux ci sont fait à tous les utilisateurs du réseau irc.ircdreams.org qui nous
+	ont permis de tester nos programmes.
+	Et merci à vous de nous avoir fait confiance et d'utiliser nos programmes, ce qui vous
+	permettra de trouver des bugs et de nous contacter pour qu'on puisse les corriger.
+
+Bonne utilisation, et bien sur, "Happy IRCing !"
+
+		-BuGs  <bugst@ircdreams.org>, Programmeur de Dreams (Dreams irc)
+							chef de projet Dreams
