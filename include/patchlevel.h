@@ -20,7 +20,7 @@
  */
 #define PATCHLEVEL "1"
 
-#define RELEASE ".24."
+#define RELEASE ".25."
 
 /*
  * Deliberate empty lines
