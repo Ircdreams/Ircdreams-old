@@ -396,7 +396,7 @@ log_vwrite(enum LogSys subsys, enum LogLevel severity, unsigned int flags,
 
   /* Build the basic log string */
   vd.vd_format = fmt;
-  vd.vd_args = vl;
+  //vd.vd_args = vl;
 
   /* save the length for writev */
   /* Log format: "SYSTEM [SEVERITY]: log message" */
