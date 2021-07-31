@@ -1,7 +1,6 @@
-/*
- * list.h
- *
- * $Id: list.h,v 1.1.1.1 2004/02/28 11:10:53 bugs Exp $
+/** @file list.h
+ * @brief Singly and doubly linked list manipulation interface.
+ * @version $Id: list.h,v 1.1.1.1 2005/10/01 17:26:56 progs Exp $
  */
 #ifndef INCLUDED_list_h
 #define INCLUDED_list_h
@@ -15,34 +14,31 @@ struct Connection;
 struct Channel;
 struct ConfItem;
 
-/* 
+/*
  * Structures
  */
 
+/** Node in a singly linked list. */
 struct SLink {
-  struct SLink *next;
+  struct SLink *next; /**< Next element in list. */
   union {
-    struct Client *cptr;
-    struct Channel *chptr;
-    struct ConfItem *aconf;
-    char *cp;
-    struct {
-      char *banstr;
-      char *who;
-      time_t when;
-    } ban;
-  } value;
-  unsigned int flags;
+    struct Client *cptr;    /**< List element as a client. */
+    struct Channel *chptr;  /**< List element as a channel. */
+    struct ConfItem *aconf; /**< List element as a configuration item. */
+    char *cp;               /**< List element as a string. */
+  } value;                  /**< Value of list element. */
+  unsigned int flags;       /**< Modifier flags for list element. */
 };
 
+/** Node in a doubly linked list. */
 struct DLink {
-  struct DLink*  next;
-  struct DLink*  prev;
+  struct DLink*  next;      /**< Next element in list. */
+  struct DLink*  prev;      /**< Previous element in list. */
   union {
-    struct Client*  cptr;
-    struct Channel* chptr;
-    char*           ch;
-  } value;
+    struct Client*  cptr;   /**< List element as a client. */
+    struct Channel* chptr;  /**< List element as a channel. */
+    char*           ch;     /**< List element as a string. */
+  } value;                  /**< Value of list element. */
 };
 
 /*
@@ -51,7 +47,6 @@ struct DLink {
 
 extern void free_link(struct SLink *lp);
 extern struct SLink *make_link(void);
-extern struct SLink *find_user_link(struct SLink *lp, struct Client *ptr);
 extern void init_list(void);
 extern struct Client *make_client(struct Client *from, int status);
 extern void free_connection(struct Connection *con);
@@ -61,8 +56,7 @@ extern void remove_client_from_list(struct Client *cptr);
 extern void add_client_to_list(struct Client *cptr);
 extern struct DLink *add_dlink(struct DLink **lpp, struct Client *cp);
 extern void remove_dlink(struct DLink **lpp, struct DLink *lp);
-extern struct ConfItem *make_conf(void);
-extern void delist_conf(struct ConfItem *aconf);
+extern struct ConfItem *make_conf(int type);
 extern void free_conf(struct ConfItem *aconf);
 extern void send_listinfo(struct Client *cptr, char *name);
 

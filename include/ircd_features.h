@@ -17,13 +17,20 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: ircd_features.h,v 1.43 2005/12/08 17:10:48 bugs Exp $
+ */
+/** @file
+ * @brief Public interfaces and declarations for dealing with configurable features.
+ * @version $Id: ircd_features.h,v 1.8 2005/12/24 14:49:13 progs Exp $
  */
 
 struct Client;
 struct StatDesc;
 
+extern struct Client his;
+
+/** Contains all feature settings for ircu.
+ * For documentation of each, see doc/readme.features.
+ */
 enum Feature {
   /* Misc. features */
   FEAT_LOG,
@@ -48,7 +55,11 @@ enum Feature {
   FEAT_HIDDEN_HOST,
   FEAT_HIDDEN_IP,
   FEAT_CONNEXIT_NOTICES,
+  FEAT_OPLEVELS,
+  FEAT_ZANNELS,
+  FEAT_LOCAL_CHANNELS,
   FEAT_TOPIC_BURST,
+  FEAT_USER_GLIST,
 
   /* features that probably should not be touched */
   FEAT_KILLCHASETIMELIMIT,
@@ -60,89 +71,77 @@ enum Feature {
   FEAT_HANGONGOODLINK,
   FEAT_HANGONRETRYDELAY,
   FEAT_CONNECTTIMEOUT,
-  FEAT_TIMESEC,
   FEAT_MAXIMUM_LINKS,
   FEAT_PINGFREQUENCY,
   FEAT_CONNECTFREQUENCY,
   FEAT_DEFAULTMAXSENDQLENGTH,
   FEAT_GLINEMAXUSERCOUNT,
+  FEAT_SOCKSENDBUF,
+  FEAT_SOCKRECVBUF,
+  FEAT_IPCHECK_CLONE_LIMIT,
+  FEAT_IPCHECK_CLONE_PERIOD,
+  FEAT_IPCHECK_CLONE_DELAY,
+  FEAT_CHANNELLEN,
 
   /* Some misc. default paths */
   FEAT_MPATH,
+  FEAT_RPATH,
   FEAT_PPATH,
 
   /* Networking features */
-  FEAT_VIRTUAL_HOST,
   FEAT_TOS_SERVER,
   FEAT_TOS_CLIENT,
   FEAT_POLLS_PER_LOOP,
+  FEAT_IRCD_RES_RETRIES,
+  FEAT_IRCD_RES_TIMEOUT,
+  FEAT_AUTH_TIMEOUT,
+  FEAT_ANNOUNCE_INVITES,
 
   /* features that affect all operators */
-  FEAT_CRYPT_OPER_PASSWORD,
-  FEAT_OPER_NO_CHAN_LIMIT,
-  FEAT_SHOW_INVISIBLE_USERS,
-  FEAT_SHOW_ALL_INVISIBLE_USERS,
-  FEAT_UNLIMIT_OPER_QUERY,
-  FEAT_LOCAL_KILL_ONLY,
   FEAT_CONFIG_OPERCMDS,
-
-  /* features that affect global opers on this server */
-  FEAT_OPER_KILL,
-  FEAT_OPER_REHASH,
-  FEAT_OPER_RESTART,
-  FEAT_OPER_DIE,
-  FEAT_OPER_GLINE,
-  FEAT_OPER_LGLINE,
-  FEAT_OPER_JUPE,
-  FEAT_OPER_LJUPE,
-  FEAT_OPER_OPMODE,
-  FEAT_OPER_FORCE_OPMODE,
-  FEAT_OPER_BADCHAN,
-  FEAT_OPER_LBADCHAN,
-  FEAT_OPER_SET,
-  FEAT_OPERS_SEE_IN_SECRET_CHANNELS,
-  FEAT_OPER_WIDE_GLINE,
 
   /* HEAD_IN_SAND Features */
   FEAT_HIS_SNOTICES,
   FEAT_HIS_SNOTICES_OPER_ONLY,
-  FEAT_HIS_DESYNCS,
   FEAT_HIS_DEBUG_OPER_ONLY,
   FEAT_HIS_WALLOPS,
   FEAT_HIS_MAP,
   FEAT_HIS_LINKS,
   FEAT_HIS_TRACE,
-  FEAT_HIS_STATS_l,
+  FEAT_HIS_STATS_a,
   FEAT_HIS_STATS_c,
-  FEAT_HIS_STATS_g,
-  FEAT_HIS_STATS_h,
-  FEAT_HIS_STATS_k,
+  FEAT_HIS_STATS_d,
+  FEAT_HIS_STATS_e,
   FEAT_HIS_STATS_f,
+  FEAT_HIS_STATS_g,
   FEAT_HIS_STATS_i,
   FEAT_HIS_STATS_j,
+  FEAT_HIS_STATS_J,
+  FEAT_HIS_STATS_k,
+  FEAT_HIS_STATS_l,
+  FEAT_HIS_STATS_L,
   FEAT_HIS_STATS_M,
   FEAT_HIS_STATS_m,
   FEAT_HIS_STATS_o,
   FEAT_HIS_STATS_p,
   FEAT_HIS_STATS_q,
+  FEAT_HIS_STATS_R,
   FEAT_HIS_STATS_r,
-  FEAT_HIS_STATS_s,
-  FEAT_HIS_STATS_d,
-  FEAT_HIS_STATS_e,
   FEAT_HIS_STATS_t,
   FEAT_HIS_STATS_T,
   FEAT_HIS_STATS_u,
   FEAT_HIS_STATS_U,
   FEAT_HIS_STATS_v,
   FEAT_HIS_STATS_w,
-  FEAT_HIS_STATS_W,
   FEAT_HIS_STATS_x,
   FEAT_HIS_STATS_y,
   FEAT_HIS_STATS_z,
   FEAT_HIS_WHOIS_SERVERNAME,
   FEAT_HIS_WHOIS_IDLETIME,
+  FEAT_HIS_WHOIS_LOCALCHAN,
   FEAT_HIS_WHO_SERVERNAME,
   FEAT_HIS_WHO_HOPCOUNT,
+  FEAT_HIS_MODEWHO,
   FEAT_HIS_BANWHO,
   FEAT_HIS_KILLWHO,
   FEAT_HIS_REWRITE,
@@ -156,52 +155,18 @@ enum Feature {
   FEAT_NETWORK,
   FEAT_URL_CLIENTS,
 
-  /* CoderZ Features */
-  FEAT_KLINE_MAIL,
-  FEAT_HIS_SERVERMODE,
-  FEAT_OPCLEARMODE,
+  /* Ircoderz features */
+  FEAT_EXTENDED_CHECKCMD,
+  FEAT_SETHOST,
+  FEAT_SETHOST_FREEFORM,
+  FEAT_SETHOST_USER,
+  FEAT_SETHOST_UNSET,
   FEAT_SETHOST_AUTO,
-  
-  /* IrcDreams Features */
-  
-  FEAT_AUTOJOIN_OPER,
-  FEAT_AUTOJOIN_OPER_NOTICE,
-  FEAT_AUTOJOIN_OPER_NOTICE_VALUE,
-  FEAT_AUTOJOIN_OPER_CHANNEL,
-  FEAT_OMPATH,
-  FEAT_AUTOJOIN_USER,
-  FEAT_AUTOJOIN_USER_NOTICE,
-  FEAT_AUTOJOIN_USER_NOTICE_VALUE,
-  FEAT_AUTOJOIN_USER_CHANNEL,
-  FEAT_EPATH,
-  FEAT_RULES,
-  FEAT_PROTECTHOST,
-  FEAT_HIS_STATS_b,
-  FEAT_AUTOINVISIBLE,
-  FEAT_TOO_MANY_FROM_IP,
-  FEAT_LOG_GESTION_MAIL,
-  FEAT_PROG_MAIL,
-  FEAT_GESTION_MAIL,
-  FEAT_ALERTE_OPER,
-  FEAT_ALERTE_SETHOST,
-  FEAT_ALERTE_GLINE,
-  FEAT_ALERTE_NETSPLIT,
-  FEAT_TPATH,
-  FEAT_SHUNMAXUSERCOUNT, 
-  FEAT_OPER_SHUN, 
-  FEAT_OPER_LSHUN, 
-  FEAT_OPER_WIDE_SHUN, 
-  FEAT_LOCOP_LSHUN, 
-  FEAT_LOCOP_WIDE_SHUN, 
-  FEAT_HIS_SHUN, 
-  FEAT_HIS_USERSHUN, 
-  FEAT_HIS_STATS_S,
-  FEAT_OPERMOTD,
-  FEAT_WALL_CONNEXIT_NOTICES,
+  FEAT_HIS_STATS_s,
+  FEAT_DEFCHMODES,
 
   FEAT_LAST_F
 };
- 
 
 extern void feature_init(void);
 
@@ -215,8 +180,8 @@ extern int feature_get(struct Client* from, const char* const* fields,
 extern void feature_unmark(void);
 extern void feature_mark(void);
 
-extern void feature_report(struct Client* to, struct StatDesc* sd, int stat,
-			   char* param);
+extern void feature_report(struct Client* to, const struct StatDesc* sd,
+                           char* param);
 
 extern int feature_int(enum Feature feat);
 extern int feature_bool(enum Feature feat);

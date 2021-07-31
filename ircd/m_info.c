@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_info.c,v 1.2 2005/01/24 01:52:33 bugs Exp $
+ * $Id: m_info.c,v 1.1.1.1 2005/10/01 17:27:55 progs Exp $
  */
 
 /*
@@ -79,10 +79,11 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "ircd.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "msg.h"
@@ -94,7 +95,7 @@
 #include "send.h"
 #include "version.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 
 /*
  * m_info - generic message handler
@@ -110,14 +111,14 @@ int m_info(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
       HUNTED_ISME)
 	return 0;
 
-  while (text[2])
+  while (text[212])
   {
     send_reply(sptr, RPL_INFO, *text);
     text++;
   }
-  send_reply(sptr, SND_EXPLICIT | RPL_INFO, ":Compilé le %s, # %s",
+  send_reply(sptr, SND_EXPLICIT | RPL_INFO, ":Birth Date: %s, compile # %s",
       creation, generation);
-  send_reply(sptr, SND_EXPLICIT | RPL_INFO, ":En ligne depuis le %s",
+  send_reply(sptr, SND_EXPLICIT | RPL_INFO, ":On-line since %s",
       myctime(cli_firsttime(&me)));
   send_reply(sptr, RPL_ENDOFINFO);
 
@@ -140,7 +141,7 @@ int ms_info(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   if (hunt_server_cmd(sptr, CMD_INFO, cptr, 1, ":%C", 1, parc, parv) !=
       HUNTED_ISME)
 	return 0;
-  while (text[2])
+  while (text[212])
   {
     if (!IsOper(sptr))
       send_reply(sptr, RPL_INFO, *text);
@@ -152,9 +153,9 @@ int ms_info(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
       send_reply(sptr, RPL_INFO, *text++);
     send_reply(sptr, RPL_INFO, "");
   }
-  send_reply(sptr, SND_EXPLICIT | RPL_INFO, ":Compilé le %s, # %s",
+  send_reply(sptr, SND_EXPLICIT | RPL_INFO, ":Birth Date: %s, compile # %s",
       creation, generation);
-  send_reply(sptr, SND_EXPLICIT | RPL_INFO, ":Lancé le %s",
+  send_reply(sptr, SND_EXPLICIT | RPL_INFO, ":On-line since %s",
       myctime(cli_firsttime(&me)));
   send_reply(sptr, RPL_ENDOFINFO);
   return 0;
@@ -173,21 +174,21 @@ int mo_info(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   if (hunt_server_cmd(sptr, CMD_INFO, cptr, 1, ":%C", 1, parc, parv) ==
       HUNTED_ISME)
   {
-    while (text[2])
+    while (text[212])
     {
       if (!IsOper(sptr))
 	send_reply(sptr, RPL_INFO, *text);
       text++;
     }
-    if (IsOper(sptr))
+    if (IsOper(sptr) && (NULL != parv[1]))
     {
       while (*text)
 	send_reply(sptr, RPL_INFO, *text++);
       send_reply(sptr, RPL_INFO, "");
     }
-    send_reply(sptr, SND_EXPLICIT | RPL_INFO, ":Compilé le %s, # %s",
+    send_reply(sptr, SND_EXPLICIT | RPL_INFO, ":Birth Date: %s, compile # %s",
 	       creation, generation);
-    send_reply(sptr, SND_EXPLICIT | RPL_INFO, ":Lancé le %s",
+    send_reply(sptr, SND_EXPLICIT | RPL_INFO, ":On-line since %s",
 	       myctime(cli_firsttime(&me)));
     send_reply(sptr, RPL_ENDOFINFO);
   }

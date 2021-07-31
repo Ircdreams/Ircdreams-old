@@ -1,7 +1,6 @@
-/*
- * s_numeric.h
- *
- * $Id: s_numeric.h,v 1.1.1.1 2004/02/28 11:11:12 bugs Exp $
+/** @file s_numeric.h
+ * @brief Send a numeric message to a client.
+ * @version $Id: s_numeric.h,v 1.1.1.1 2005/10/01 17:27:01 progs Exp $
  */
 #ifndef INCLUDED_s_numeric_h
 #define INCLUDED_s_numeric_h

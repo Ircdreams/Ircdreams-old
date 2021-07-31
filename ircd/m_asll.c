@@ -19,7 +19,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_asll.c,v 1.2 2005/01/24 01:19:23 bugs Exp $
+ * $Id: m_asll.c,v 1.1.1.1 2005/10/01 17:27:49 progs Exp $
  */
 
 /*
@@ -78,11 +78,12 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "hash.h"
 #include "ircd.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "numeric.h"
@@ -93,7 +94,7 @@
 #include "s_bsd.h"
 #include "s_user.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <stdlib.h>
 
 static int send_asll_reply(struct Client *from, struct Client *to, char *server,

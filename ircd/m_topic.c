@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_topic.c,v 1.8 2005/09/27 03:35:51 bugs Exp $
+ * $Id: m_topic.c,v 1.4 2005/12/25 17:26:59 progs Exp $
  */
 
 /*
@@ -79,13 +79,14 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "channel.h"
 #include "client.h"
 #include "hash.h"
 #include "ircd.h"
 #include "ircd_features.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "msg.h"
@@ -93,22 +94,25 @@
 #include "numnicks.h"
 #include "send.h"
 
-#include <assert.h>
-#include <stdlib.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
+#include <stdlib.h> /* for atoi() */
 
-static void do_settopic(struct Client *sptr, struct Client *cptr, 
+static void do_settopic(struct Client *sptr, struct Client *cptr,
 		        struct Channel *chptr, char *topic, time_t ts)
 {
-   int newtopic;
    struct Client *from;
+   int newtopic;
 
-   if (feature_bool(FEAT_HIS_BANWHO) && IsServer(sptr)) {
-      from = &me;
-   }
-   else {
-      from = sptr;
-   }
+   if (feature_bool(FEAT_HIS_BANWHO) && IsServer(sptr))
+       from = &his;
+   else
+       from = sptr;
 
+   if (!client_can_send_to_channel(sptr, chptr, 1, 0))
+   {
+      send_reply(sptr, ERR_CANNOTSENDTOCHAN, chptr->chname);
+      return;
+   }
    /* Note if this is just a refresh of an old topic, and don't
     * send it to all the clients to save bandwidth.  We still send
     * it to other servers as they may have split and lost the topic.
@@ -118,18 +122,19 @@ static void do_settopic(struct Client *sptr, struct Client *cptr,
    ircd_strncpy(chptr->topic, topic, TOPICLEN);
    ircd_strncpy(chptr->topic_nick, cli_name(from), NICKLEN);
    chptr->topic_time = ts ? ts : TStime();
-   /* Fixed in 2.10.11: Don't propergate local topics */
-   sendcmdto_serv_butone(sptr, CMD_TOPIC, cptr, "%H %Tu :%s", chptr,
-                           chptr->topic_time, chptr->topic);
+   /* Fixed in 2.10.11: Don't propagate local topics */
+   if (!IsLocalChannel(chptr->chname))
+     sendcmdto_serv_butone(sptr, CMD_TOPIC, cptr, "%H %Tu %Tu :%s", chptr,
+		           chptr->topic_time, chptr->creationtime, chptr->topic);
    if (newtopic)
-      sendcmdto_channel_butserv_butone(from, CMD_TOPIC, chptr, NULL, 0,
-                                       "%H :%s", chptr, chptr->topic);
+     sendcmdto_channel_butserv_butone(from, CMD_TOPIC, chptr, NULL, 0,
+      				       "%H :%s", chptr, chptr->topic);
       /* if this is the same topic as before we send it to the person that
        * set it (so they knew it went through ok), but don't bother sending
        * it to everyone else on the channel to save bandwidth
        */
     else if (MyUser(sptr))
-      sendcmdto_one(sptr, CMD_TOPIC, sptr, "%H :%s", chptr, chptr->topic);   	
+      sendcmdto_one(sptr, CMD_TOPIC, sptr, "%H :%s", chptr, chptr->topic);
 }
 
 /*
@@ -143,8 +148,7 @@ int m_topic(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 {
   struct Channel *chptr;
   char *topic = 0, *name, *p = 0;
-  struct Membership *member;
-  
+
   if (parc < 2)
     return need_more_params(sptr, "TOPIC");
 
@@ -160,15 +164,15 @@ int m_topic(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
     	send_reply(sptr,ERR_NOSUCHCHANNEL,name);
     	continue;
     }
-    member=find_channel_member(sptr, chptr);
     /* Trying to check a topic outside a secret channel */
-    if ((topic || SecretChannel(chptr)) && !member)
+    if ((topic || SecretChannel(chptr)) && !find_channel_member(sptr, chptr))
     {
       send_reply(sptr, ERR_NOTONCHANNEL, chptr->chname);
       continue;
     }
 
-    if (!topic)                 /* only asking for topic */
+    /* only asking for topic */
+    if (!topic)
     {
       if (chptr->topic[0] == '\0')
 	send_reply(sptr, RPL_NOTOPIC, chptr->chname);
@@ -181,15 +185,11 @@ int m_topic(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
     }
     else
     {
-      /* if +t and not @'d, return an error and ignore the topic */
-      if ((chptr->mode.mode & MODE_TOPICLIMIT) != 0 && !IsChanOp(member) && !IsAnOper(sptr))
+      if ((chptr->mode.mode & MODE_TOPICLIMIT) && !is_chan_op(sptr, chptr))
       {
-        send_reply(sptr, ERR_CHANOPRIVSNEEDED, chptr->chname);
-        return 0;
-      }
-      /* If a delayed join member is changing the topic, reveal them */
-      if (member && IsDelayedJoin(member)) {
-        RevealDelayedJoin(member);
+         /* if +t and not @'d, return an error and ignore the topic */
+         send_reply(sptr, ERR_CHANOPRIVSNEEDED, chptr->chname);
+         continue;
       }
       do_settopic(sptr,cptr,chptr,topic,0);
     }
@@ -202,13 +202,13 @@ int m_topic(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
  *
  * parv[0]        = sender prefix
  * parv[1]        = channel
- * parv[parc - 2] = timestamp (optional)
+ * parv[2]        = topic timestamp (optional)
+ * parv[3]        = channel timestamp (optional)
  * parv[parc - 1] = topic
  */
 int ms_topic(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 {
   struct Channel *chptr;
-  struct Membership *member;
   char *topic = 0, *name, *p = 0;
   time_t ts = 0;
 
@@ -217,7 +217,7 @@ int ms_topic(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 
   topic = parv[parc - 1];
 
-  for (; (name = ircd_strtok(&p, parv[1], ",")); parv[1] = 0)
+  for (; (name = ircd_strtok(&p, parv[1], ",")); parv[1] = 0, ts = 0)
   {
     chptr = 0;
     /* Does the channel exist */
@@ -227,14 +227,24 @@ int ms_topic(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
     	continue;
     }
 
-    if (parc > 3 && (ts = atoi(parv[parc - 2])) && chptr->topic_time > ts)
+    /* Ignore requests for topics from remote servers */
+    if (IsLocalChannel(name) && !MyUser(sptr))
+    {
+      protocol_violation(sptr,"Topic request");
+      continue;
+    }
+
+    /* If existing channel is older or has newer topic, ignore */
+    /* Note: bien garder cet ordre, car on a besoin de la valeur "ts" donnée
+     *       par parv[2] (si existant) pour la fonction do_settopic() !
+     */
+    if (parc > 4 && (ts = atoi(parv[3])) && chptr->creationtime < ts)
       continue;
 
-    /* If it's being set by a delayed join member, send the join */
-    if ((member=find_channel_member(sptr,chptr)) && IsDelayedJoin(member))
-      RevealDelayedJoin(member);
+    if (parc > 3 && (ts = atoi(parv[2])) && chptr->topic_time > ts)
+      continue;
 
-    do_settopic(sptr,cptr,chptr,topic,ts);
+    do_settopic(sptr,cptr,chptr,topic, ts);
   }
   return 0;
 }

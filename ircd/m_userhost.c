@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_userhost.c,v 1.6 2005/09/21 17:27:02 bugs Exp $
+ * $Id: m_userhost.c,v 1.2 2005/10/09 18:48:36 progs Exp $
  */
 
 /*
@@ -79,25 +79,33 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "msgq.h"
 #include "numeric.h"
 #include "s_user.h"
-#include "ircd_struct.h"
+#include "struct.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 
 static void userhost_formatter(struct Client* cptr, struct Client *sptr, struct MsgBuf* mb)
 {
   assert(IsUser(cptr));
   msgq_append(0, mb, "%s%s=%c%s@%s", cli_name(cptr),
-	      HasPriv(cptr, PRIV_DISPLAY) ? "*" : "",
+              SeeOper(sptr,cptr) ? "*" : "",
 	      cli_user(cptr)->away ? '-' : '+', cli_user(cptr)->username,
-	      (sptr == cptr || IsAnOper(sptr)) ? cli_user(cptr)->realhost : cli_user(cptr)->crypt);
+	      /* Do not *EVER* change this to give opers the real host.
+	       * Too many scripts rely on this data and can inadvertently
+	       * publish the user's real host, thus breaking the security
+	       * of +x.  If an oper wants the real host, he should go to
+	       * /whois to get it.
+	       */
+	      (sptr != cptr) ?
+	      cli_user(cptr)->host : cli_user(cptr)->realhost);
 }
 
 /*

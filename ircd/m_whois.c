@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_whois.c,v 1.38 2006/02/23 05:55:13 bugs Exp $
+ * $Id: m_whois.c,v 1.9 2005/12/23 12:57:57 kouak Exp $
  */
 
 /*
@@ -79,13 +79,14 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "channel.h"
 #include "client.h"
 #include "hash.h"
 #include "ircd.h"
 #include "ircd_features.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "match.h"
@@ -94,17 +95,18 @@
 #include "numnicks.h"
 #include "s_user.h"
 #include "send.h"
-#include "whocmds.h"
-#include "s_conf.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <string.h>
+
+/** Maximum number of lines to send in response to a /WHOIS. */
+#define MAX_WHOIS_LINES 50
 
 /*
  * 2000-07-01: Isomer
  *  * Rewritten to make this understandable
- *  * You can nolonger /whois unregistered clients.
- *  
+ *  * You can no longer /whois unregistered clients.
+ *
  *
  * General rules:
  *  /whois nick always shows the nick.
@@ -131,26 +133,20 @@ static void do_whois(struct Client* sptr, struct Client *acptr, int parc)
 {
   struct Client *a2cptr=0;
   struct Channel *chptr=0;
-
   int mlen;
   int len;
   static char buf[512];
-  
+
   const struct User* user = cli_user(acptr);
-  const char* name = (!*(cli_name(acptr))) ? "?" : cli_name(acptr);  
-  a2cptr = user->server;
+  const char* name = (!*(cli_name(acptr))) ? "?" : cli_name(acptr);
+  a2cptr = feature_bool(FEAT_HIS_WHOIS_SERVERNAME) && !IsAnOper(sptr)
+      && sptr != acptr ? &his : user->server;
   assert(user);
-
-  if(IsHiding(acptr) && !IsAnOper(sptr)) {
-	send_reply(sptr, ERR_NOSUCHNICK, name);
-	return;
-  }
-
-  send_reply(sptr, RPL_WHOISUSER, name, user->username, user->crypt,
+  send_reply(sptr, RPL_WHOISUSER, name, user->username, user->host,
 		   cli_info(acptr));
 
   /* Display the channels this user is on. */
-  if ((!IsChannelService(acptr) && !IsNoChan(acptr)) || (acptr==sptr) || (IsAnOper(sptr) && !IsChannelService(acptr)))
+  if (!IsChannelService(acptr))
   {
     struct Membership* chan;
     mlen = strlen(cli_name(&me)) + strlen(cli_name(sptr)) + 12 + strlen(name);
@@ -159,113 +155,75 @@ static void do_whois(struct Client* sptr, struct Client *acptr, int parc)
     for (chan = user->channel; chan; chan = chan->next_channel)
     {
        chptr = chan->channel;
-       
-       if (!ShowChannel(sptr, chptr) && !IsAnOper(sptr))
+
+       if (!ShowChannel(sptr, chptr) && !(IsAnOper(sptr)))
           continue;
-          
+
        if (acptr != sptr && IsZombie(chan))
           continue;
-          
-       if (len+strlen(chptr->chname) + mlen > BUFSIZE - 5) 
+
+       /* Don't show local channels when HIS is defined, unless it's a
+	* remote WHOIS --ULtimaTe_
+	*/
+       if (IsLocalChannel(chptr->chname) && (acptr != sptr) && (parc == 2)
+           && feature_bool(FEAT_HIS_WHOIS_LOCALCHAN) && !IsAnOper(sptr))
+	  continue;
+
+       if (len+strlen(chptr->chname) + mlen > BUFSIZE - 5)
        {
           send_reply(sptr, SND_EXPLICIT | RPL_WHOISCHANNELS, "%s :%s", name, buf);
           *buf = '\0';
           len = 0;
        }
-       if(!ShowChannel(sptr, chptr) && IsAnOper(sptr))
-         buf[len++] = '$'; /* j'ai remplacé par $ le % */
-	 
-       if (IsDeaf(acptr)) buf[len++] = '-';
-       
-       if (IsZombie(chan)) buf[len++] = '!';
-       
-       else
-       {
-	 if (IsDelayedJoin(chan) && (sptr!=acptr)) buf[len++] = '<';
-         else if (IsChanOp(chan)) buf[len++] = '@';
-	 else if (IsHalfop(chan)) buf[len++] = '%';
-         else if (HasVoice(chan)) buf[len++] = '+';
-       }
-       if (len) buf[len] = 0;
+       if (IsDeaf(acptr))
+         *(buf + len++) = '-';
+       if (IsOper(sptr) && !ShowChannel(sptr, chptr))
+         *(buf + len++) = '%';
+       if (IsDelayedJoin(chan) && (sptr != acptr))
+         *(buf + len++) = '<';
+       else if (IsChanOp(chan))
+         *(buf + len++) = '@';
+       else if (HasVoice(chan))
+         *(buf + len++) = '+';
+       else if (IsZombie(chan))
+         *(buf + len++) = '!';
+       if (len)
+          *(buf + len) = '\0';
        strcpy(buf + len, chptr->chname);
        len += strlen(chptr->chname);
-       buf[len++] = ' '; /* don't strcat .. --Cesar */
+       buf[len++] = ' ';
        buf[len] = 0;
      }
      if (buf[0] != '\0')
         send_reply(sptr, RPL_WHOISCHANNELS, name, buf);
   }
 
-  if (feature_bool(FEAT_HIS_WHOIS_SERVERNAME) && !IsAnOper(sptr) &&
-      sptr != acptr)
-    send_reply(sptr, RPL_WHOISSERVER, name, feature_str(FEAT_HIS_SERVERNAME),
-	       feature_str(FEAT_HIS_SERVERINFO));
-  else
-    send_reply(sptr, RPL_WHOISSERVER, name, cli_name(a2cptr),
-	       cli_info(a2cptr));
+  send_reply(sptr, RPL_WHOISSERVER, name, cli_name(a2cptr),
+             cli_info(a2cptr));
 
   if (user)
   {
-    if((feature_int(FEAT_PROTECTHOST) && !IsChannelService(acptr)) || IsSetHost(acptr) || HasHiddenHost(acptr))
-	send_reply(sptr, RPL_WHOISCRYPT, name);
-
-    if (IsMale(acptr) || IsFemale(acptr))
-       send_reply(sptr, RPL_SEXE, name, IsMale(acptr) ? "" : "e", IsMale(acptr) ? "homme" : "femme");
-
-    if (IsProtect(acptr) && (!IsHideOper(acptr) || IsAnOper(sptr) || acptr == sptr))
-       send_reply(sptr, RPL_GODMODE, name);
-
     if (user->away)
        send_reply(sptr, RPL_AWAY, name, user->away);
 
-    if (IsAnOper(acptr) && (HasPriv(acptr, PRIV_DISPLAY) || HasPriv(sptr, PRIV_SEE_OPERS)) &&
-	(!IsHideOper(acptr) || IsAnOper(sptr) || acptr == sptr)) /* putain de conditions hein !? */
-       send_reply(sptr, RPL_WHOISOPERATOR, name, IsFemale(acptr) ? "une IRC Opératrice" : "un IRC Opérateur",
-          IsChannelService(acptr) ?  /* ça fait plus structuré ainsi :p */
-	    " * Service"
-	  : IsAnAdmin(acptr) ?
-	      IsFemale(acptr) ?
-	       " * Administratrice"
-	      : " * Administrateur"
-	  : "");
+    if (SeeOper(sptr,acptr))
+       send_reply(sptr, RPL_WHOISOPERATOR, name, IsChannelService(acptr) ? " - Service" : "");
 
-    if (IsWhois(acptr) && (cli_name(acptr) != cli_name(sptr))) {
-           sendcmdto_one(&me, CMD_NOTICE, acptr, "%C :*** Notice -- %s (%s@%s) fait un /WHOIS sur vous!", acptr, cli_name(sptr),
-           cli_user(sptr)->username, cli_user(sptr)->realhost);
-    }
+    if (IsAccount(acptr))
+      send_reply(sptr, RPL_WHOISACCOUNT, name, user->account);
 
-    if (IsHiding(acptr) && IsAnOper(sptr))
-	send_reply(sptr, RPL_WHOISHIDING, name);	
-
-    if (IsHelper(acptr))
-      send_reply(sptr, RPL_WHOISHELPER, name, IsFemale(acptr) ? "e" : "", IsFemale(acptr) ? "euse" : "eur");
-
-    if (IsAnOper(sptr) || acptr == sptr)
-       send_reply(sptr, RPL_MODES, name, umode_str(acptr));
-
-    if (user->swhois)
-      send_reply(sptr, RPL_SWHOIS, name, user->swhois);
-
-    if (IsAccount(acptr)) 
-      send_reply(sptr, RPL_WHOISACCOUNT, name, user->account, IsFemale(acptr) ? "e" : "");
-
-    if (IsSSL(acptr))
-      send_reply(sptr, RPL_WHOISSSL, name);
-
-    if (IsPAccOnly(acptr))
-      send_reply(sptr, RPL_PACCOUNLY, name);
-
-    if (IsNoPrivate(acptr))
-      send_reply(sptr, RPL_NOPV, name);	
-
-    if ((cli_user(acptr)->crypt != cli_user(acptr)->host || HasHiddenHost(acptr) || IsSetHost(acptr)) && (IsAnOper(sptr) || acptr == sptr))
+    if ((IsAnOper(sptr) || acptr == sptr) && (HasHiddenHost(acptr) || ircd_strcmp(cli_user(acptr)->host, cli_user(acptr)->realhost)))
       send_reply(sptr, RPL_WHOISACTUALLY, name, user->username,
-        user->realhost, ircd_ntoa((const char*) &(cli_ip(acptr))));
-     
-    if (MyConnect(acptr) && (IsAnOper(sptr) || (!IsNoIdle(acptr) && (!feature_bool(FEAT_HIS_WHOIS_IDLETIME) ||
-			     sptr == acptr || IsAnOper(sptr) || parc >= 3))))
-      send_reply(sptr, RPL_WHOISIDLE, name, CurrentTime - user->last, 
-		 cli_firsttime(acptr));
+                 user->realhost, ircd_ntoa(&cli_ip(acptr)));
+
+    /* Hint: if your looking to add more flags to a user, eg +h, here's
+     *       probably a good place to add them :)
+     */
+
+    if (MyConnect(acptr) && (!feature_bool(FEAT_HIS_WHOIS_IDLETIME) ||
+                             (sptr == acptr || IsAnOper(sptr) || parc >= 3)))
+       send_reply(sptr, RPL_WHOISIDLE, name, CurrentTime - user->last,
+                  cli_firsttime(acptr));
   }
 }
 
@@ -276,40 +234,40 @@ static void do_whois(struct Client* sptr, struct Client *acptr, int parc)
  */
 static int do_wilds(struct Client* sptr, char *nick, int count, int parc)
 {
-  struct Client *acptr; /* Current client we're concidering */
+  struct Client *acptr; /* Current client we're considering */
   struct User *user; 	/* the user portion of the client */
-  char *name; 		/* the name of this client */
-  struct Membership* chan; 
+  const char *name; 	/* the name of this client */
+  struct Membership* chan;
   int invis; 		/* does +i apply? */
   int member;		/* Is this user on any channels? */
   int showperson;       /* Should we show this person? */
   int found = 0 ;	/* How many were found? */
-  
-  /* Ech! This is hidious! */
+
+  /* Ech! This is hideous! */
   for (acptr = GlobalClientList; (acptr = next_client(acptr, nick));
       acptr = cli_next(acptr))
   {
-    if (!IsRegistered(acptr)) 
+    if (!IsRegistered(acptr))
       continue;
-      
+
     if (IsServer(acptr))
       continue;
     /*
      * I'm always last :-) and acptr->next == 0!!
      *
-     * Isomer: Does this strike anyone else as being a horrible hidious
+     * Isomer: Does this strike anyone else as being a horrible hideous
      *         hack?
      */
     if (IsMe(acptr)) {
       assert(!cli_next(acptr));
       break;
     }
-    
+
     /*
      * 'Rules' established for sending a WHOIS reply:
      *
-     * - if wildcards are being used dont send a reply if
-     *   the querier isnt any common channels and the
+     * - if wildcards are being used don't send a reply if
+     *   the querier isn't any common channels and the
      *   client in question is invisible.
      *
      * - only send replies about common or public channels
@@ -322,7 +280,7 @@ static int do_wilds(struct Client* sptr, char *nick, int count, int parc)
     invis = (acptr != sptr) && IsInvisible(acptr);
     member = (user && user->channel) ? 1 : 0;
     showperson = !invis && !member;
-    
+
     /* Should we show this person now? */
     if (showperson) {
     	found++;
@@ -331,7 +289,7 @@ static int do_wilds(struct Client* sptr, char *nick, int count, int parc)
     	  return found;
     	continue;
     }
-    
+
     /* Step through the channels this user is on */
     for (chan = user->channel; chan; chan = chan->next_channel)
     {
@@ -342,13 +300,13 @@ static int do_wilds(struct Client* sptr, char *nick, int count, int parc)
         showperson = 1;
         break;
       }
-      
+
       /* if this channel is +p and not +s, show them */
       if (!invis && HiddenChannel(chptr) && !SecretChannel(chptr)) {
           showperson = 1;
           break;
       }
-      
+
       member = find_channel_member(sptr, chptr) ? 1 : 0;
       if (invis && !member)
         continue;
@@ -356,27 +314,24 @@ static int do_wilds(struct Client* sptr, char *nick, int count, int parc)
       /* If sptr isn't really on this channel, skip it */
       if (IsZombie(chan))
         continue;
-       
-      /* Is this a common channel? */ 
+
+      /* Is this a common channel? */
       if (member) {
         showperson = 1;
         break;
       }
     } /* of for (chan in channels) */
-    
+
     /* Don't show this person */
     if (!showperson)
       continue;
 
-    if (IsHiding(acptr) && !IsAnOper(sptr))
-      continue;
-      
     do_whois(sptr, acptr, parc);
     found++;
     if (count+found>MAX_WHOIS_LINES)
-       return found;  
+       return found;
   } /* of global client list */
-  
+
   return found;
 }
 
@@ -412,24 +367,27 @@ int m_whois(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
      * it with the correct servername - as is needed by hunt_server().
      * This is the secret behind the /whois nick nick trick.
      */
-    if (feature_int(FEAT_HIS_REMOTE)) {
+    if (feature_int(FEAT_HIS_REMOTE))
+    {
       /* If remote queries are disabled, then use the *second* parameter of
        * of whois, so /whois nick nick still works.
        */
-      if (!IsAnOper(sptr)) {
-	if (!FindUser(parv[2])) {
-	  send_reply(sptr, ERR_NOSUCHNICK, parv[2]);
-	  send_reply(sptr, RPL_ENDOFWHOIS, parv[2]);
-	  return 0;
-	}
-	parv[1] = parv[2];
+      if (!IsAnOper(sptr))
+      {
+        if (!FindUser(parv[2]))
+        {
+          send_reply(sptr, ERR_NOSUCHNICK, parv[2]);
+          send_reply(sptr, RPL_ENDOFWHOIS, parv[2]);
+          return 0;
+        }
+        parv[1] = parv[2];
       }
     }
 
     if (hunt_server_cmd(sptr, CMD_WHOIS, cptr, 0, "%C :%s", 1, parc, parv) !=
        HUNTED_ISME)
     return 0;
-    
+
     parv[1] = parv[2];
   }
 
@@ -438,9 +396,9 @@ int m_whois(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
     int wilds;
 
     found = 0;
-    
+
     collapse(nick);
-    
+
     wilds = (strchr(nick, '?') || strchr(nick, '*'));
     if (!wilds) {
       struct Client *acptr = 0;
@@ -453,12 +411,11 @@ int m_whois(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
     }
     else /* wilds */
     {
-	wildscount++;
-	if (wildscount > 3) {
-		send_reply(sptr, ERR_QUERYTOOLONG, parv[1]);
-		break;
-	}
-	found=do_wilds(sptr, nick, total, parc);
+      if (++wildscount > 3) {
+        send_reply(sptr, ERR_QUERYTOOLONG, parv[1]);
+        break;
+      }
+      found=do_wilds(sptr, nick, total, parc);
     }
 
     if (!found)
@@ -510,15 +467,15 @@ int ms_whois(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   }
 
   total = 0;
-  
+
   for (tmp = parv[1]; (nick = ircd_strtok(&p, tmp, ",")); tmp = 0)
   {
     struct Client *acptr = 0;
 
     found = 0;
-    
+
     collapse(nick);
-    
+
 
     acptr = FindUser(nick);
     if (acptr && !IsServer(acptr)) {
@@ -528,14 +485,14 @@ int ms_whois(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 
     if (!found)
       send_reply(sptr, ERR_NOSUCHNICK, nick);
-      
+
     total+=found;
-      
+
     if (total >= MAX_WHOIS_LINES) {
       send_reply(sptr, ERR_QUERYTOOLONG, parv[1]);
       break;
     }
-      
+
     if (p)
       p[-1] = ',';
   } /* of tokenised parm[1] */
@@ -543,3 +500,4 @@ int ms_whois(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 
   return 0;
 }
+

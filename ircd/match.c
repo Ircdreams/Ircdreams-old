@@ -15,10 +15,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: match.c,v 1.4 2005/11/05 01:44:04 bugs Exp $
  */
-#include "../config.h"
+/** @file
+ * @brief Functions to match strings against IRC mask strings.
+ * @version $Id: match.c,v 1.1.1.1 2005/10/01 17:28:19 progs Exp $
+ */
+#include "config.h"
 
 #include "match.h"
 #include "ircd_chattr.h"
@@ -837,196 +839,24 @@ int mmexec(const char *wcm, int wminlen, const char *rcm, int rminlen)
   return 1;                     /* Auch... something left out ? Fail */
 }
 
-/*
- * matchcompIP()
- * Compiles an IP mask into an in_mask structure
- * The given <mask> can either be:
- * - An usual irc type mask, containing * and or ?
- * - An ip number plus a /bitnumber part, that will only consider
- *   the first "bitnumber" bits of the IP (bitnumber must be in 0-31 range)
- * - An ip numer plus a /ip.bit.mask.values that will consider
- *   only the bits marked as 1 in the ip.bit.mask.values
- * In the last two cases both the ip number and the bitmask can specify
- * less than 4 bytes, the missing bytes then default to zero, note that
- * this is *different* from the way inet_aton() does and that this does
- * NOT happen for normal IPmasks (not containing '/')
- * If the returned value is zero the produced in_mask might match some IP,
- * if it's nonzero it will never match anything (and the imask struct is
- * set so that always fails).
- *
- * The returned structure contains 3 fields whose meaning is the following:
- * im.mask = The bits considered significative in the IP
- * im.bits = What these bits should look like to have a match
- * im.fall = If zero means that the above information used as 
- *           ((IP & im.mask) == im.bits) is enough to tell if the compiled
- *           mask matches the given IP, nonzero means that it is needed,
- *           in case they did match, to call also the usual text match
- *           functions, because the mask wasn't "completely compiled"
- *
- * They should be used like:
- * matchcompIP(&im, mask);
- * if ( ((IP & im.mask)!=im.bits)) || (im.fall&&match(mask,inet_ntoa(IP))) )
- *    { handle_non_match } else { handle_match };
- * instead of:
- * if ( match(mask, inet_ntoa(IP)) )
- *    { handle_non_match } else { handle_match };
- * 
- * Note: This function could be smarter when dealing with complex masks,
- *       this implementation is quite lazy and understands only very simple
- *       cases, whatever contains a ? anywhere or contains a '*' that isn't
- *       part of a trailing '.*' will fallback to text-match, this could be 
- *       avoided for masks like 12?3.5.6 12.*.3.4 1.*.*.2 72?72?72?72 and
- *       so on that "could" be completely compiled to IP masks.
- *       If you try to improve this be aware of the fact that ? and *
- *       could match both dots and digits and we _must_ always reject
- *       what doesn't match in textform (like leading zeros and so on),
- *       so it's a LOT more tricky than it might seem. By now most common
- *       cases are optimized.
+/** Test whether an address matches the most significant bits of a mask.
+ * @param[in] addr Address to test.
+ * @param[in] mask Address to test against.
+ * @param[in] bits Number of bits to test.
+ * @return 0 on mismatch, 1 if bits < 128 and all bits match; -1 if
+ * bits == 128 and all bits match.
  */
-
-int matchcompIP(struct in_mask *imask, const char *mask)
+int ipmask_check(const struct irc_in_addr *addr, const struct irc_in_addr *mask, unsigned char bits)
 {
-  const char *m = mask;
-  unsigned int bits = 0;
-  unsigned int filt = 0;
-  int unco = 0;
-  int digits = 0;
-  int shift = 24;
-  int tmp = 0;
+  int k;
 
-  do
-  {
-    switch (*m)
-    {
-      case '\\':
-        if ((m[1] == '\\') || (m[1] == '*') || (m[1] == '?')
-            || (m[1] == '\0'))
-          break;
-        continue;
-      case '0':
-      case '1':
-      case '2':
-      case '3':
-      case '4':
-      case '5':
-      case '6':
-      case '7':
-      case '8':
-      case '9':
-        if (digits && !tmp)     /* Leading zeros */
-          break;
-        digits++;
-        tmp *= 10;
-        tmp += (*m - '0');      /* Can't overflow, INT_MAX > 2559 */
-        if (tmp > 255)
-          break;
-        continue;
-      case '\0':
-        filt = 0xFFFFFFFF;
-        /* Intentional fallthrough */
-      case '.':
-        if ((!shift) != (!*m))
-          break;
-        /* Intentional fallthrough */
-      case '/':
-        bits |= (tmp << shift);
-        shift -= 8;
-        digits = 0;
-        tmp = 0;
-        if (*m != '/')
-          continue;
-        shift = 24;
-        do
-        {
-          m++;
-          if (IsDigit(*m))
-          {
-            if (digits && !tmp) /* Leading zeros */
-              break;
-            digits++;
-            tmp *= 10;
-            tmp += (*m - '0');  /* Can't overflow, INT_MAX > 2559 */
-            if (tmp > 255)
-              break;
-          }
-          else
-          {
-            switch (*m)
-            {
-              case '.':
-              case '\0':
-                if ((!shift) && (*m))
-                  break;
-                filt |= (tmp << shift);
-                shift -= 8;
-                tmp = 0;
-                digits = 0;
-                continue;
-              default:
-                break;
-            }
-            break;
-          }
-        }
-        while (*m);
-        if (*m)
-          break;
-        if (filt && (!(shift < 16)) && (!(filt & 0xE0FFFFFF)))
-          filt = 0xFFFFFFFF << (32 - ((filt >> 24)));
-        bits &= filt;
-        continue;
-      case '?':
-        unco = 1;
-        /* Intentional fallthrough */
-      case '*':
-        if (digits)
-          unco = 1;
-        filt = (0xFFFFFFFF << (shift)) << 8;
-        while (*++m)
-        {
-          if (IsDigit(*m))
-            unco = 1;
-          else
-          {
-            switch (*m)
-            {
-              case '.':
-                if (m[1] != '*')
-                  unco = 1;
-                if (!shift)
-                  break;
-                shift -= 8;
-                continue;
-              case '?':
-                unco = 1;
-              case '*':
-                continue;
-              default:
-                break;
-            }
-            break;
-          }
-        }
-        if (*m)
-          break;
-        continue;
-      default:
-        break;
-    }
-
-    /* If we get here there is some error and this can't ever match */
-    filt = 0;
-    bits = ~0;
-    unco = 0;
-    break;                      /* This time break the loop :) */
-
+  for (k = 0; k < 8; k++) {
+    if (bits < 16)
+      return !(htons(addr->in6_16[k] ^ mask->in6_16[k]) >> (16-bits));
+    if (addr->in6_16[k] != mask->in6_16[k])
+      return 0;
+    if (!(bits -= 16))
+      return 1;
   }
-  while (*m++);
-
-  imask->bits.s_addr = htonl(bits);
-  imask->mask.s_addr = htonl(filt);
-  imask->fall = unco;
-  return ((bits & ~filt) ? -1 : 0);
-
+  return -1;
 }
-

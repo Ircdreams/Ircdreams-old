@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_die.c,v 1.3 2005/01/24 01:19:23 bugs Exp $
+ * $Id: m_die.c,v 1.2 2005/10/30 10:15:22 progs Exp $
  */
 
 /*
@@ -79,10 +79,11 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "ircd.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "msg.h"
@@ -91,7 +92,7 @@
 #include "s_bsd.h"
 #include "send.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 
 
 /*
@@ -101,20 +102,23 @@ int mo_die(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 {
   struct Client *acptr;
   int i;
+  const char *msg;
 
-  if (!CanDie(sptr) || !WantRestart(sptr) || !HasPriv(sptr, PRIV_DIE))
+  if (!HasPriv(sptr, PRIV_DIE))
     return send_reply(sptr, ERR_NOPRIVILEGES);
+
+  msg = (parc > 1 && *parv[parc - 1] != '\0') ? parv[parc - 1] : "";
 
   for (i = 0; i <= HighestFd; i++)
   {
     if (!(acptr = LocalClientArray[i]))
       continue;
     if (IsUser(acptr))
-      sendcmdto_one(&me, CMD_NOTICE, acptr, "%C :Fermeture du serveur. %s",
-		    acptr, get_client_name(sptr, HIDE_IP));
+      sendcmdto_one(&me, CMD_NOTICE, acptr, "%C :Server Terminating. %s: %s",
+		    acptr, get_client_name(sptr, HIDE_IP), msg);
     else if (IsServer(acptr))
-      sendcmdto_one(&me, CMD_ERROR, acptr, ":Fermeture par %s",
-		    get_client_name(sptr, HIDE_IP));
+      sendcmdto_one(&me, CMD_ERROR, acptr, ":Terminated by %s: %s",
+		    get_client_name(sptr, HIDE_IP), msg);
   }
   server_die("received DIE");
 

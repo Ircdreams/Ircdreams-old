@@ -20,20 +20,20 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_defaults.c,v 1.2 2005/01/24 01:52:33 bugs Exp $
+ * $Id: m_defaults.c,v 1.2 2005/10/23 23:31:01 progs Exp $
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "ircd.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "numeric.h"
 #include "numnicks.h"
 #include "send.h"
-#include "supported.h"
 #include "version.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 
 /*
  * m_functions execute protocol messages on this server:

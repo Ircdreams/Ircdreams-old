@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_kick.c,v 1.28 2006/04/05 11:35:16 bugs Exp $
+ * $Id: m_kick.c,v 1.10 2005/12/24 14:50:40 progs Exp $
  */
 
 /*
@@ -79,21 +79,22 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "channel.h"
 #include "client.h"
 #include "hash.h"
 #include "ircd.h"
-#include "ircd_features.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "msg.h"
 #include "numeric.h"
 #include "numnicks.h"
 #include "send.h"
+#include "ircd_features.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 
 /*
  * m_kick - generic message handler
@@ -108,6 +109,7 @@ int m_kick(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
   struct Client *who;
   struct Channel *chptr;
   struct Membership *member = 0;
+  struct Membership* member2;
   char *name, *comment;
 
   ClrFlag(sptr, FLAG_TS8);
@@ -121,54 +123,53 @@ int m_kick(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
   if (!(chptr = get_channel(sptr, name, CGT_NO_CREATE)))
     return send_reply(sptr, ERR_NOSUCHCHANNEL, name);
 
-  if (!(is_chan_op(sptr, chptr) || is_halfop(sptr, chptr) || IsAnOper(sptr) || IsChannelService(sptr)))
+  if (!(member2 = find_member_link(chptr, sptr)) || IsZombie(member2)
+      || !IsChanOp(member2))
     return send_reply(sptr, ERR_CHANOPRIVSNEEDED, name);
 
   if (!(who = find_chasing(sptr, parv[2], 0)))
     return 0; /* find_chasing sends the reply for us */
 
+  if(IsAnOper(who) && IsProtected(who) && !IsAnOper(sptr))
+  	return send_reply(sptr, ERR_ISOPERLCHAN, cli_name(who), chptr->chname);
+
+
   /* Don't allow the channel service to be kicked */
   if (IsChannelService(who))
     return send_reply(sptr, ERR_ISCHANSERVICE, cli_name(who), chptr->chname);
 
-  if (IsHiding(who))
-    return send_reply(sptr, ERR_USERNOTINCHANNEL, cli_name(who), chptr->chname);    
-
-  /* On ne kick pas les godmode, Le Monsieur il a dit non ! */
-  if(IsProtect(who))
-    return send_reply(sptr, ERR_ISGODMODE, cli_name(who), chptr->chname);
-
-  if(IsHelper(who) && !IsAnOper(sptr) && who != sptr)
-    return send_reply(sptr, ERR_ISHELPER, cli_name(who), chptr->chname);
- 
-  if (!IsAnOper(sptr) && is_halfop(sptr, chptr) && ( (is_chan_op(who, chptr) || is_halfop(who, chptr)) && (who != sptr) && !is_chan_op(sptr,chptr)))
-        return send_reply(sptr, ERR_NOKICKAUTORIZED, "Un halfop n'a pas le pouvoir de kicker un opérateur ou un autre halfop");
-  
   /* check if kicked user is actually on the channel */
   if (!(member = find_member_link(chptr, who)) || IsZombie(member))
     return send_reply(sptr, ERR_USERNOTINCHANNEL, cli_name(who), chptr->chname);
 
+  /* Don't allow to kick member with a higher or equal op-level */
+  if (OpLevel(member) < OpLevel(member2)
+      || (OpLevel(member) == OpLevel(member2)
+          && OpLevel(member) < MAXOPLEVEL))
+    return send_reply(sptr, ERR_NOTLOWEROPLEVEL, cli_name(who), chptr->chname,
+	OpLevel(member2), OpLevel(member), "kick",
+	OpLevel(member) == OpLevel(member2) ? "the same" : "a higher");
+
   /* We rely on ircd_snprintf to truncate the comment */
   comment = EmptyString(parv[parc - 1]) ? parv[0] : parv[parc - 1];
 
-  sendcmdto_serv_butone(sptr, CMD_KICK, cptr, "%H %C :%s", chptr, who,
+  if (!IsLocalChannel(name))
+    sendcmdto_serv_butone(sptr, CMD_KICK, cptr, "%H %C :%s", chptr, who,
 			  comment);
 
   if (IsDelayedJoin(member)) {
     /* If it's a delayed join, only send the KICK to the person doing
      * the kicking and the victim */
-    if (MyUser(who)) {
+    if (MyUser(who))
       sendcmdto_one(sptr, CMD_KICK, who, "%H %C :%s", chptr, who, comment);
-    }
+    sendcmdto_one(who, CMD_JOIN, sptr, "%H", chptr);
     sendcmdto_one(sptr, CMD_KICK, sptr, "%H %C :%s", chptr, who, comment);
-    CheckDelayedJoins(chptr);
-  } else {
+    /* CheckDelayedJoins(chptr); * D'après Entrope, mais on sait pas pourquoi... */
+  } else
     sendcmdto_channel_butserv_butone(sptr, CMD_KICK, chptr, NULL, 0, "%H %C :%s", chptr, who,
                                      comment);
-  }
 
   make_zombie(member, who, cptr, sptr, chptr);
-
 
   return 0;
 }
@@ -197,7 +198,8 @@ int ms_kick(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
   comment = parv[parc - 1];
 
   /* figure out who gets kicked from what */
-  if (!(chptr = get_channel(sptr, name, CGT_NO_CREATE)) ||
+  if (IsLocalChannel(name) ||
+      !(chptr = get_channel(sptr, name, CGT_NO_CREATE)) ||
       !(who = findNUser(parv[2])))
     return 0;
 
@@ -207,9 +209,9 @@ int ms_kick(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
 
   /* Send HACK notice, but not for servers in BURST */
   /* 2002-10-17: Don't send HACK if the users local server is kicking them */
-  if (IsServer(sptr) 
-      && !IsBurstOrBurstAck(sptr)
-      && sptr!=cli_from(who))
+  if (IsServer(sptr) &&
+      !IsBurstOrBurstAck(sptr) &&
+      sptr!=cli_user(who)->server)
     sendto_opmask_butone(0, SNO_HACK4, "HACK: %C KICK %H %C %s", sptr, chptr,
 			 who, comment);
 
@@ -218,15 +220,14 @@ int ms_kick(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
    * operator, bounce the kick
    */
   if (!IsServer(sptr) && member && cli_from(who) != cptr &&
-      (!(sptr_link = find_member_link(chptr, sptr)) || !(IsChanOp(sptr_link) || IsHalfop(sptr_link) ||
-        IsAnOper(sptr) || IsChannelService(sptr)))) {
+      (!(sptr_link = find_member_link(chptr, sptr)) || !IsChanOp(sptr_link))) {
     sendto_opmask_butone(0, SNO_HACK2, "HACK: %C KICK %H %C %s", sptr, chptr,
 			 who, comment);
 
     sendcmdto_one(who, CMD_JOIN, cptr, "%H", chptr);
 
     /* Reop/revoice member */
-    if (IsChanOp(member) || HasVoice(member) || IsHalfop(member)) {
+    if (IsChanOp(member) || HasVoice(member)) {
       struct ModeBuf mbuf;
 
       modebuf_init(&mbuf, sptr, cptr, chptr,
@@ -235,30 +236,26 @@ int ms_kick(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
 		    MODEBUF_DEST_BOUNCE)); /* And bounce the MODE */
 
       if (IsChanOp(member))
-	modebuf_mode_client(&mbuf, MODE_DEL | MODE_CHANOP, who);
-      if (IsHalfop(member))
-      	modebuf_mode_client(&mbuf, MODE_DEL | MODE_HALFOP, who);	
+	modebuf_mode_client(&mbuf, MODE_DEL | MODE_CHANOP, who, OpLevel(member));
       if (HasVoice(member))
-	modebuf_mode_client(&mbuf, MODE_DEL | MODE_VOICE, who);
+	modebuf_mode_client(&mbuf, MODE_DEL | MODE_VOICE, who, MAXOPLEVEL + 1);
 
       modebuf_flush(&mbuf);
     }
   } else {
     /* Propagate kick... */
-    sendcmdto_serv_butone(sptr, CMD_KICK, cptr, "%H %C :%s", chptr, who,
-			  comment);
+    sendcmdto_serv_butone(sptr, CMD_KICK, cptr, "%H %C :%s", chptr, who, comment);
 
-    if (member) { /* and tell the channel about it, unless
-                   * it's a delayed join, in which case we just
-                   * tell the target */
+    if (member) { /* and tell the channel about it */
       if (IsDelayedJoin(member)) {
-        if (MyUser(who))
-          sendcmdto_one(sptr, CMD_KICK, who, "%H %C :%s", chptr, who, comment);
-        CheckDelayedJoins(chptr);
-      } else {
-      sendcmdto_channel_butserv_butone(IsServer(sptr) && feature_bool(FEAT_HIS_SERVERMODE) ? &me : sptr,
-                                       CMD_KICK, chptr, NULL, 0, "%H %C :%s", chptr, who,
-                                       comment);
+         if (MyUser(who))
+           sendcmdto_one(IsServer(sptr) && feature_bool(FEAT_HIS_REWRITE) ? &his : sptr,
+                                  CMD_KICK, who, "%H %C :%s", chptr, who, comment);
+      }
+      else
+      {
+	  sendcmdto_channel_butserv_butone(IsServer(sptr) && feature_bool(FEAT_HIS_REWRITE) ? &his :
+                     sptr, CMD_KICK, chptr, NULL, 0, "%H %C :%s", chptr, who, comment);
       }
 
       make_zombie(member, who, cptr, sptr, chptr);

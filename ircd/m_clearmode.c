@@ -1,5 +1,5 @@
 /*
- * IRC - Internet Relay Chat, ircd/m_tmpl.c
+ * IRC - Internet Relay Chat, ircd/m_clearmode.c
  * Copyright (C) 1990 Jarkko Oikarinen and
  *                    University of Oulu, Computing Center
  * Copyright (C) 2000 Kevin L. Mitchell <klmitch@mit.edu>
@@ -21,7 +21,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_clearmode.c,v 1.19 2005/12/03 12:27:34 bugs Exp $
+ * $Id: m_clearmode.c,v 1.4 2006/02/16 18:10:52 progs Exp $
  */
 
 /*
@@ -80,7 +80,7 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "channel.h"
@@ -97,9 +97,8 @@
 #include "numnicks.h"
 #include "s_conf.h"
 #include "send.h"
-#include "support.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 
 /*
  * do_clearmode(struct Client *cptr, struct Client *sptr,
@@ -113,7 +112,6 @@ do_clearmode(struct Client *cptr, struct Client *sptr, struct Channel *chptr,
 {
   static int flags[] = {
     MODE_CHANOP,	'o',
-    MODE_HALFOP,	'h',
     MODE_VOICE,		'v',
     MODE_PRIVATE,	'p',
     MODE_SECRET,	's',
@@ -125,17 +123,10 @@ do_clearmode(struct Client *cptr, struct Client *sptr, struct Channel *chptr,
     MODE_BAN,		'b',
     MODE_LIMIT,		'l',
     MODE_REGONLY,	'r',
-    MODE_NOCOLOUR,      'c',
-    MODE_NOCTCP,        'C',
-    MODE_OPERONLY,      'O',
-    MODE_NONOTICE,      'N',
-    MODE_ACCONLY,       'R',
-    MODE_NOQUITPARTS,	'q',
-    MODE_NOAMSG,	'T',
-    MODE_NOCAPS,	'M',
     MODE_DELJOINS,      'D',
-    MODE_NOWEBPUB,	'W',
-    MODE_NOCHANPUB,	'P',
+    MODE_NOCTCP,        'C',
+    MODE_NOCOLOR,       'c',
+    MODE_NONOTICE,			'N',
     0x0, 0x0
   };
   int *flag_p;
@@ -143,7 +134,7 @@ do_clearmode(struct Client *cptr, struct Client *sptr, struct Channel *chptr,
   char control_buf[20];
   int control_buf_i = 0;
   struct ModeBuf mbuf;
-  struct SLink *link, *next;
+  struct Ban *link, *next;
   struct Membership *member;
 
   /* Ok, so what are we supposed to get rid of? */
@@ -189,44 +180,39 @@ do_clearmode(struct Client *cptr, struct Client *sptr, struct Channel *chptr,
    */
   if (del_mode & MODE_BAN) {
     for (link = chptr->banlist; link; link = next) {
+      char *bandup;
       next = link->next;
 
+      DupString(bandup, link->banstr);
       modebuf_mode_string(&mbuf, MODE_DEL | MODE_BAN, /* delete ban */
-			  link->value.ban.banstr, 1);
-
-      MyFree(link->value.ban.who); /* free up who string */
-      free_link(link); /* and of course the link itself */
+			  bandup, 1);
+      free_ban(link);
     }
 
     chptr->banlist = 0;
   }
 
   /* Deal with users on the channel */
-  if (del_mode & (MODE_BAN | MODE_CHANOP | MODE_HALFOP | MODE_VOICE))
+  if (del_mode & (MODE_BAN | MODE_CHANOP | MODE_VOICE))
     for (member = chptr->members; member; member = member->next_member) {
       if (IsZombie(member)) /* we ignore zombies */
 	continue;
-	  if (IsProtect(member->user) || IsChannelService(member->user))
-	  	continue;
+
+      if (IsProtected(member->user) || IsChannelService(member->user))	
+ 	continue;
 
       if (del_mode & MODE_BAN) /* If we cleared bans, clear the valid flags */
 	ClearBanValid(member);
 
       /* Drop channel operator status */
       if (IsChanOp(member) && del_mode & MODE_CHANOP) {
-	modebuf_mode_client(&mbuf, MODE_DEL | MODE_CHANOP, member->user);
+	modebuf_mode_client(&mbuf, MODE_DEL | MODE_CHANOP, member->user, MAXOPLEVEL + 1);
 	member->status &= ~CHFL_CHANOP;
-      }
-
-      /* Drop halfop */
-      if (IsHalfop(member) && del_mode & MODE_HALFOP) {
-                modebuf_mode_client(&mbuf, MODE_DEL | MODE_HALFOP, member->user);
-                member->status &= ~CHFL_HALFOP;
       }
 
       /* Drop voice */
       if (HasVoice(member) && del_mode & MODE_VOICE) {
-	modebuf_mode_client(&mbuf, MODE_DEL | MODE_VOICE, member->user);
+	modebuf_mode_client(&mbuf, MODE_DEL | MODE_VOICE, member->user, MAXOPLEVEL + 1);
 	member->status &= ~CHFL_VOICE;
       }
     }
@@ -250,7 +236,8 @@ do_clearmode(struct Client *cptr, struct Client *sptr, struct Channel *chptr,
 	    chptr, control_buf);
 
   /* Then send it */
-  sendcmdto_serv_butone(sptr, CMD_CLEARMODE, cptr, "%H %s", chptr,
+  if (!IsLocalChannel(chptr->chname))
+    sendcmdto_serv_butone(sptr, CMD_CLEARMODE, cptr, "%H %s", chptr,
 			  control_buf);
 
   return 0;
@@ -272,11 +259,12 @@ ms_clearmode(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
     return need_more_params(sptr, "CLEARMODE");
 
   if (!IsPrivileged(sptr)) {
-    protocol_violation(sptr,"No priviledges on source for CLEARMODE, desync?");
+    protocol_violation(sptr,"No privileges on source for CLEARMODE, desync?");
     return send_reply(sptr, ERR_NOPRIVILEGES);
   }
 
-  if (!IsChannelName(parv[1]) || !(chptr = FindChannel(parv[1])))
+  if (!IsChannelName(parv[1]) || IsLocalChannel(parv[1]) ||
+      !(chptr = FindChannel(parv[1])))
     return send_reply(sptr, ERR_NOSUCHCHANNEL, parv[1]);
 
   return do_clearmode(cptr, sptr, chptr, parv[2]);
@@ -293,17 +281,12 @@ int
 mo_clearmode(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 {
   struct Channel *chptr;
-  char *control = "ohvpsmtinkblrcqCNOPRPWDMT"; /* default control string */
-  char *chname, *qreason;
+  char *control = "ovpsmikbl"; /* default control string */
+  const char *chname, *qreason;
   int force = 0;
 
-  if (!feature_bool(FEAT_OPCLEARMODE))
+  if (!feature_bool(FEAT_CONFIG_OPERCMDS))
     return send_reply(sptr, ERR_DISABLED, "CLEARMODE");
-
-  /* on oubli pas le Oflag O Progs :p */
-
-  if (MyUser(sptr) && !OpIsGlobal(sptr))
-   return send_reply(sptr, ERR_NOPRIVILEGES);
 
   if (parc < 2)
     return need_more_params(sptr, "CLEARMODE");
@@ -312,12 +295,21 @@ mo_clearmode(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
     control = parv[2];
 
   chname = parv[1];
-  if (*chname == '!') {
+  if (*chname == '!')
+  {
     chname++;
+    if (!HasPriv(sptr, IsLocalChannel(chname) ?
+                         PRIV_FORCE_LOCAL_OPMODE :
+                         PRIV_FORCE_OPMODE))
+      return send_reply(sptr, ERR_NOPRIVILEGES);
     force = 1;
   }
 
-  if (('#' != *chname) || !(chptr = FindChannel(chname)))
+  if (!HasPriv(sptr,
+	       IsLocalChannel(chname) ? PRIV_LOCAL_OPMODE : PRIV_OPMODE))
+    return send_reply(sptr, ERR_NOPRIVILEGES);
+
+  if (('#' != *chname && '&' != *chname) || !(chptr = FindChannel(chname)))
     return send_reply(sptr, ERR_NOSUCHCHANNEL, chname);
 
   if (!force && (qreason = find_quarantine(chptr->chname)))

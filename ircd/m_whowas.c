@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_whowas.c,v 1.2 2005/01/24 01:19:23 bugs Exp $
+ * $Id: m_whowas.c,v 1.2 2006/02/06 15:00:49 progs Exp $
  */
 
 /*
@@ -79,12 +79,13 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "hash.h"
 #include "ircd.h"
 #include "ircd_features.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "msg.h"
@@ -95,7 +96,7 @@
 #include "send.h"
 #include "whowas.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <stdlib.h>
 
 /*
@@ -103,7 +104,7 @@
  *
  * parv[0] = sender prefix
  * parv[1] = nickname queried
- * parv[2] = maximum returned items (optional, default is unlimitted)
+ * parv[2] = maximum returned items (optional, default is unlimited)
  * parv[3] = remote server target (Opers only, max returned items 20)
  */
 int m_whowas(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
@@ -135,18 +136,17 @@ int m_whowas(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
     {
       if (0 == ircd_strcmp(nick, temp->name))
       {
-	if (IsAnOper(sptr))
-	  send_reply(sptr, RPL_WHOWASUSER, temp->name, temp->username,
-		     temp->hostname, temp->realname);
-	else
-	  send_reply(sptr, RPL_WHOWASUSER, temp->name, temp->username,
-		     temp->crypt, temp->realname);
-	send_reply(sptr, RPL_WHOISSERVER, temp->name,
-		   feature_bool(FEAT_HIS_WHOIS_SERVERNAME) && !IsOper(sptr) ?
-		   feature_str(FEAT_HIS_SERVERNAME) : temp->servername,
-		   myctime(temp->logoff));
+        send_reply(sptr, RPL_WHOWASUSER, temp->name, temp->username,
+           temp->hostname, temp->realname);
+        if (IsAnOper(sptr) && temp->realhost)
+          send_reply(sptr, RPL_WHOISACTUALLY, temp->name, temp->username, temp->realhost, "<untracked>");
+        send_reply(sptr, RPL_WHOISSERVER, temp->name,
+                   (feature_bool(FEAT_HIS_WHOIS_SERVERNAME) && !IsOper(sptr)) ?
+                     feature_str(FEAT_HIS_SERVERNAME) :
+                     temp->servername,
+        myctime(temp->logoff));
         if (temp->away)
-	  send_reply(sptr, RPL_AWAY, temp->name, temp->away);
+          send_reply(sptr, RPL_AWAY, temp->name, temp->away);
         cur++;
         found++;
       }

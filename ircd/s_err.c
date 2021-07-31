@@ -15,44 +15,44 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: s_err.c,v 1.64 2006/01/25 16:35:34 bugs Exp $
  */
-#include "../config.h"
+/** @file
+ * @brief Error handling support.
+ * @version $Id: s_err.c,v 1.10 2005/12/25 18:08:22 progs Exp $
+ */
+#include "config.h"
 
 #include "numeric.h"
+#include "ircd_log.h"
 #include "s_debug.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <string.h>
 
+/** Array of Numeric replies, indexed by numeric. */
 static Numeric replyTable[] = {
 /* 000 */
   { 0 },
 /* 001 */
-  { RPL_WELCOME, ":Bienvenue sur le réseau de discussion %s%s%s, %s", "001" },
+  { RPL_WELCOME, ":Welcome to the %s IRC Network%s%s, %s", "001" },
 /* 002 */
-  { RPL_YOURHOST, ":Le serveur est %s, version %s", "002" },
+  { RPL_YOURHOST, ":Your host is %s, running version %s", "002" },
 /* 003 */
-  { RPL_CREATED, ":Ce server a été créé le %s", "003" },
+  { RPL_CREATED, ":This server was created %s", "003" },
 /* 004 */
-  { RPL_MYINFO, "%s %s acdfghikorswxACDHIOPRWXZ bcdhiklmnopqrstvCDMNOPRTW bklohv" , "004" },
+  { RPL_MYINFO, "%s %s %s %s %s", "004" },
 /* 005 */
-  { RPL_ISUPPORT, "%s :sont supportés par le serveur.", "005" },
+  { RPL_ISUPPORT, "%s :are supported by this server", "005" },
 /* 006 */
   { 0 },
 /* 007 */
   { 0 },
 /* 008 */
-  { RPL_SNOMASK, "%d :: Server notice mask (%#x)", "008" },
+  { RPL_SNOMASK, "%u :: Server notice mask (%#x)", "008" },
 /* 009 */
-  { RPL_STATMEMTOT, "%u %u :Bytes Blocks", "009" },
+  { 0 },
 /* 010 */
-#ifdef MEMSIZESTATS
-  { RPL_STATMEM, "%u %u %s %u", "010" },
-#else
-  { RPL_STATMEM, "%u %u %s", "010" },
-#endif
+  { 0 },
 /* 011 */
   { 0 },
 /* 012 */
@@ -62,11 +62,11 @@ static Numeric replyTable[] = {
 /* 014 */
   { 0 },
 /* 015 */
-  { RPL_MAP, ":%s%s%s %s [%i clients]", "015" },
+  { RPL_MAP, ":%s%s%s %s [%u clients]", "015" },
 /* 016 */
   { RPL_MAPMORE, ":%s%s --> *more*", "016" },
 /* 017 */
-  { RPL_MAPEND, ":Fin du /MAP", "017" },
+  { RPL_MAPEND, ":End of /MAP", "017" },
 /* 018 */
   { 0 },
 /* 019 */
@@ -92,11 +92,11 @@ static Numeric replyTable[] = {
 /* 029 */
   { 0 },
 /* 030 */
-  { 0 },
+  { RPL_APASSWARN_SET, ":Channel Admin password (+A) set to '%s'.  Are you SURE you want to use this as Admin password? You will NOT be able to change this password anymore once the channel is more than 48 hours old!", "030" },
 /* 031 */
-  { 0 },
+  { RPL_APASSWARN_SECRET, ":Use \"/MODE %s -A %s\" to remove the password and then immediately set a new one.  IMPORTANT: YOU CANNOT RECOVER THIS PASSWORD, EVER; WRITE THE PASSWORD DOWN (don't store this rescue password on disk)! Now set the channel user password (+U).", "031" },
 /* 032 */
-  { 0 },
+  { RPL_APASSWARN_CLEAR, ":WARNING: You removed the channel Admin password (+A). If you disconnect or leave the channel without setting a new password then you will not be able to set it again!  SET A NEW PASSWORD NOW!", "032" },
 /* 033 */
   { 0 },
 /* 034 */
@@ -434,23 +434,23 @@ static Numeric replyTable[] = {
 /* 200 */
   { RPL_TRACELINK, "Link %s.%s %s %s", "200" },
 /* 201 */
-  { RPL_TRACECONNECTING, "Try. %d %s", "201" },
+  { RPL_TRACECONNECTING, "Try. %s %s", "201" },
 /* 202 */
-  { RPL_TRACEHANDSHAKE, "H.S. %d %s", "202" },
+  { RPL_TRACEHANDSHAKE, "H.S. %s %s", "202" },
 /* 203 */
-  { RPL_TRACEUNKNOWN, "???? %d %s", "203" },
+  { RPL_TRACEUNKNOWN, "???? %s %s", "203" },
 /* 204 */
-  { RPL_TRACEOPERATOR, "Oper %d %s %ld", "204" },
+  { RPL_TRACEOPERATOR, "Oper %s %s %ld", "204" },
 /* 205 */
-  { RPL_TRACEUSER, "User %d %s %ld", "205" },
+  { RPL_TRACEUSER, "User %s %s %ld", "205" },
 /* 206 */
-  { RPL_TRACESERVER, "Serv %d %dS %dC %s %s!%s@%s %ld %ld", "206" },
+  { RPL_TRACESERVER, "Serv %s %dS %dC %s %s!%s@%s %ld %ld", "206" },
 /* 207 */
   { 0 },
 /* 208 */
   { RPL_TRACENEWTYPE, "<newtype> 0 %s", "208" },
 /* 209 */
-  { RPL_TRACECLASS, "Class %d %d", "209" },
+  { RPL_TRACECLASS, "Class %s %u", "209" },
 /* 210 */
   { 0 },
 /* 211 */
@@ -458,25 +458,25 @@ static Numeric replyTable[] = {
 /* 212 */
   { RPL_STATSCOMMANDS, "%s %u %u", "212" },
 /* 213 */
-  { RPL_STATSCLINE, "%c %s * %s %d %d", "213" },
+  { RPL_STATSCLINE, "C %s * %d %d %s %s", "213" },
 /* 214 */
-  { RPL_STATSNLINE, "%c %s * %s %d %d", "214" },
+  { 0 },
 /* 215 */
-  { RPL_STATSILINE, "%c %s * %s %d %d", "215" },
+  { RPL_STATSILINE, "I %s %d %s%s %d %s", "215" },
 /* 216 */
-  { RPL_STATSKLINE, "%c %s \"%s\" %s 0 0", "216" },
+  { RPL_STATSKLINE, "%c %s@%s \"%s\" \"%s\" 0 0", "216" },
 /* 217 */
   { RPL_STATSPLINE, "P %d %d %s %s", "217" },
 /* 218 */
-  { RPL_STATSYLINE, "%c %d %d %d %d %ld %d", "218" },
+  { RPL_STATSYLINE, "%c %s %d %d %u %u %u", "218" },
 /* 219 */
-  { RPL_ENDOFSTATS, "%c :Fin du /STATS", "219" },
+  { RPL_ENDOFSTATS, "%s :End of /STATS report", "219" },
 /* 220 */
   { 0 },
 /* 221 */
   { RPL_UMODEIS, "%s", "221" },
 /* 222 */
-  { 0 },
+  { RPL_STATSJLINE, "J %s", "222" },
 /* 223 */
   { 0 },
 /* 224 */
@@ -484,67 +484,67 @@ static Numeric replyTable[] = {
 /* 225 */
   { 0 },
 /* 226 */
-  { 0 },
+  { RPL_STATSALINE, "%s", "226" },
 /* 227 */
   { 0 },
 /* 228 */
   { RPL_STATSQLINE, "Q %s :%s", "228" },
 /* 229 */
-  { RPL_STATSBLINE, "%s %s %s %s", "276" },
+  { 0 },
 /* 230 */
   { 0 },
 /* 231 */
-  { RPL_SERVICEINFO, 0, "231" },
+  { 0 },
 /* 232 */
-  { RPL_ENDOFSERVICES, 0, "232" },
+  { 0 },
 /* 233 */
-  { RPL_SERVICE, 0, "233" },
+  { 0 },
 /* 234 */
-  { RPL_SERVLIST, 0, "234" },
+  { 0 },
 /* 235 */
-  { RPL_SERVLISTEND, 0, "235" },
+  { 0 },
 /* 236 */
   { RPL_STATSVERBOSE, "V :Sent as explicit", "236" },
 /* 237 */
-  { RPL_STATSENGINE, "%s :Moteur réseau", "237" },
+  { RPL_STATSENGINE, "%s :Event loop engine", "237" },
 /* 238 */
-  { RPL_STATSFLINE, "%c %s %s", "238" },
+  { RPL_STATSFLINE, "F %s %s", "238" },
 /* 239 */
   { 0 },
 /* 240 */
   { 0 },
 /* 241 */
-  { RPL_STATSLLINE, "%c %s * %s %d %d", "241" },
+  { RPL_STATSLLINE, "Module Description EntryPoint", "241" },
 /* 242 */
-  { RPL_STATSUPTIME, ":Serveur lancé depuis %d jours, %d:%02d:%02d", "242" },
+  { RPL_STATSUPTIME, ":Server Up %d days, %d:%02d:%02d", "242" },
 /* 243 */
-  { RPL_STATSOLINE, "%c %s * %s %d %d", "243" },
+  { RPL_STATSOLINE, "%c %s@%s * %s %s", "243" },
 /* 244 */
-  { RPL_STATSHLINE, "%c %s * %s %d %d", "244" },
+  { 0 },
 /* 245 */
   { 0 },
 /* 246 */
   { RPL_STATSTLINE, "%c %s %s", "246" },
 /* 247 */
-  { RPL_STATSGLINE, "%c %s%s%s@%s %Tu :%s", "247" },
+  { RPL_STATSGLINE, "%c %s%s%s%s%s %Tu :%s", "247" },
 /* 248 */
-  { RPL_STATSULINE, "%c %s %s %s %d %d", "248" },
+  { RPL_STATSULINE, "U %s", "248" },
 /* 249 */
   { RPL_STATSDEBUG, 0, "249" },
 /* 250 */
-  { RPL_STATSCONN, ":Maximum de connexion reçues: %d (%d clients)", "250" },
+  { RPL_STATSCONN, ":Highest connection count: %u (%u clients)", "250" },
 /* 251 */
-  { RPL_LUSERCLIENT, ":On trouve %d chatteur(s) dont %d invisible(s) sur %d serveur(s)", "251" },
+  { RPL_LUSERCLIENT, ":There are %u users and %u invisible on %u servers", "251" },
 /* 252 */
-  { RPL_LUSEROP, "%d :operateur(s) connecté(s)", "252" },
+  { RPL_LUSEROP, "%u :operator(s) online", "252" },
 /* 253 */
-  { RPL_LUSERUNKNOWN, "%d :connection(s) inconnue(s)", "253" },
+  { RPL_LUSERUNKNOWN, "%u :unknown connection(s)", "253" },
 /* 254 */
-  { RPL_LUSERCHANNELS, "%d :salons formés", "254" },
+  { RPL_LUSERCHANNELS, "%u :channels formed", "254" },
 /* 255 */
-  { RPL_LUSERME, ":Je possède %d client(s) et %d serveur(s)", "255" },
+  { RPL_LUSERME, ":I have %u clients and %u servers", "255" },
 /* 256 */
-  { RPL_ADMINME, ":Informations administratives à propos de %s", "256" },
+  { RPL_ADMINME, ":Administrative info about %s", "256" },
 /* 257 */
   { RPL_ADMINLOC1, ":%s", "257" },
 /* 258 */
@@ -554,17 +554,17 @@ static Numeric replyTable[] = {
 /* 260 */
   { 0 },
 /* 261 */
-  { RPL_TRACELOG, "File %s %d", "261" },
+  { 0 },
 /* 262 */
-  { RPL_TRACEPING, "Ping %s %s", "262" },
+  { RPL_TRACEEND, ":End of TRACE", "262" },
 /* 263 */
   { 0 },
 /* 264 */
   { 0 },
 /* 265 */
-  { RPL_CURRENT_LOCAL, ":Nombre d'utilisateurs actuels local: %d Maximum: %d", "265" },
+  { 0 },
 /* 266 */
-  { RPL_CURRENT_GLOBAL, ":Nombre d'utilisateurs actuels global: %d Maximum: %d", "266" },
+  { 0 },
 /* 267 */
   { 0 },
 /* 268 */
@@ -574,9 +574,9 @@ static Numeric replyTable[] = {
 /* 270 */
   { RPL_PRIVS, "%s :", "270" },
 /* 271 */
-  { RPL_SILELIST, "%s %s", "271" },
+  { RPL_SILELIST, "%s %s%s", "271" },
 /* 272 */
-  { RPL_ENDOFSILELIST, "%s :Fin de la liste des Silences", "272" },
+  { RPL_ENDOFSILELIST, "%s :End of Silence List", "272" },
 /* 273 */
   { 0 },
 /* 274 */
@@ -584,7 +584,7 @@ static Numeric replyTable[] = {
 /* 275 */
   { RPL_STATSDLINE, "%c %s %s", "275" },
 /* 276 */
-  { 0 },
+  { RPL_STATSRLINE, "%-9s %-9s %-10s %s", "276" },
 /* 277 */
   { 0 },
 /* 278 */
@@ -594,19 +594,19 @@ static Numeric replyTable[] = {
 /* 280 */
   { RPL_GLIST, "%s%s%s%s%s %Tu %s %c :%s", "280" },
 /* 281 */
-  { RPL_ENDOFGLIST, ":Fin de la liste des G-Lines", "281" },
+  { RPL_ENDOFGLIST, ":End of G-line List", "281" },
 /* 282 */
   { RPL_JUPELIST, "%s %Tu %s %c :%s", "282" },
 /* 283 */
-  { RPL_ENDOFJUPELIST, ":Fin de la liste des Jupes", "283" },
+  { RPL_ENDOFJUPELIST, ":End of Jupe List", "283" },
 /* 284 */
   { RPL_FEATURE, 0, "284" },
 /* 285 */
-  { RPL_NEWHOSTIS, "%s: %s host %s - [%s@%s]" },
+  { 0 },
 /* 286 */
-  { RPL_CHKHEAD, ":Informations pour %s '%s'", "286" },
+  { RPL_CHKHEAD, ":Information for %s %s", "286" },
 /* 287 */
-  { RPL_CHANUSER, ":    %s%s (%s@%s)   (%s)", "287" },
+  { RPL_CHANUSER, ":    %s%s (%s@%s)   (%s) %s", "287" },
 /* 288 */
   { 0 },
 /* 289 */
@@ -632,7 +632,7 @@ static Numeric replyTable[] = {
 /* 299 */
   { 0 },
 /* 300 */
-  { RPL_NONE, 0, "300" },
+  { 0 },
 /* 301 */
   { RPL_AWAY, "%s :%s", "301" },
 /* 302 */
@@ -640,61 +640,61 @@ static Numeric replyTable[] = {
 /* 303 */
   { RPL_ISON, ":", "303" },
 /* 304 */
-  { RPL_TEXT, 0, "304" },
+  { 0 },
 /* 305 */
-  { RPL_UNAWAY, ":Vous êtes revenu%s de votre absence", "305" },
+  { RPL_UNAWAY, ":You are no longer marked as being away", "305" },
 /* 306 */
-  { RPL_NOWAWAY, ":Vous êtes désormais absent%s", "306" },
+  { RPL_NOWAWAY, ":You have been marked as being away", "306" },
 /* 307 */
   { 0 },
 /* 308 */
-  { RPL_SWHOIS, "%s :%s", "308" },
+  { 0 },
 /* 309 */
   { 0 },
 /* 310 */
-  { RPL_WHOISHELPER, "%s :est un%s Help%s (Agent d'Aide du Réseau)", "310" },
+  { 0 },
 /* 311 */
   { RPL_WHOISUSER, "%s %s %s * :%s", "311" },
 /* 312 */
   { RPL_WHOISSERVER, "%s %s :%s", "312" },
 /* 313 */
-  { RPL_WHOISOPERATOR, "%s :est %s%s", "313" },
+  { RPL_WHOISOPERATOR, "%s :is an IRC Operator%s", "313" },
 /* 314 */
   { RPL_WHOWASUSER, "%s %s %s * :%s", "314" },
 /* 315 */
-  { RPL_ENDOFWHO, "%s :Fin de la commande /WHO", "315" },
+  { RPL_ENDOFWHO, "%s :End of /WHO list.", "315" },
 /* 316 */
-  { RPL_GODMODE, "%s :Mode dieu ACTIF ! (Mode +Z)", "316" },
+  { 0 },
 /* 317 */
-  { RPL_WHOISIDLE, "%s %ld %ld :secondes d'inactivités, date de connexion", "317" },
+  { RPL_WHOISIDLE, "%s %ld %ld :seconds idle, signon time", "317" },
 /* 318 */
-  { RPL_ENDOFWHOIS, "%s :Fin de la commande /WHOIS", "318" },
+  { RPL_ENDOFWHOIS, "%s :End of /WHOIS list.", "318" },
 /* 319 */
   { RPL_WHOISCHANNELS, "%s :%s", "319" },
 /* 320 */
-  { RPL_WHOISCRYPT, "%s :Protection hostname activée", "320" },
+  { 0 },
 /* 321 */
   { RPL_LISTSTART, "Channel :Users  Name", "321" },
 /* 322 */
-  { RPL_LIST, "%s %d :%s", "322" },
+  { RPL_LIST, "%s %u :%s", "322" },
 /* 323 */
-  { RPL_LISTEND, ":Fin de la commande /LIST", "323" },
+  { RPL_LISTEND, ":End of /LIST", "323" },
 /* 324 */
   { RPL_CHANNELMODEIS, "%s %s %s", "324" },
 /* 325 */
   { 0 },
 /* 326 */
-  { RPL_MODES, "%s :mode(s) : +%s", "326" },
+  { 0 },
 /* 327 */
-  { RPL_HELPER, "Vous êtes maintenant un agent d'aide du réseau", "327" },
+  { 0 },
 /* 328 */
   { 0 },
 /* 329 */
   { RPL_CREATIONTIME, "%s %Tu", "329" },
 /* 330 */
-  { RPL_WHOISACCOUNT, "%s %s :est identifié%s en tant que", "330" },
+  { RPL_WHOISACCOUNT, "%s %s :is logged in as", "330" },
 /* 331 */
-  { RPL_NOTOPIC, "%s :Aucun topic.", "331" },
+  { RPL_NOTOPIC, "%s :No topic is set.", "331" },
 /* 332 */
   { RPL_TOPIC, "%s :%s", "332" },
 /* 333 */
@@ -702,13 +702,13 @@ static Numeric replyTable[] = {
 /* 334 */
   { RPL_LISTUSAGE, ":%s", "334" },
 /* 335 */
-  { RPL_PACCOUNLY, "%s :accepte seulement les messages des utilisateurs enregistrés", "335" },
+  { 0 },
 /* 336 */
-  { RPL_NOPV, "%s :n'accepte pas les messages privés", "336" },
+  { 0 },
 /* 337 */
-  { RPL_WHOISSSL, "%s :est connecté par SSL", "337" },
+  { 0 },
 /* 338 */
-  { RPL_WHOISACTUALLY, "%s %s@%s %s :User@host actuel, IP actuelle", "338" },
+  { RPL_WHOISACTUALLY, "%s %s@%s %s :Actual user@host, Actual IP", "338" },
 /* 339 */
   { 0 },
 /* 340 */
@@ -722,11 +722,11 @@ static Numeric replyTable[] = {
 /* 344 */
   { 0 },
 /* 345 */
-  { 0 },
+  { RPL_ISSUEDINVITE, "%s %s %s :%s has been invited by %s", "345" },
 /* 346 */
   { RPL_INVITELIST, ":%s", "346" },
 /* 347 */
-  { RPL_ENDOFINVITELIST, ":Fin de la liste des Invites", "347" },
+  { RPL_ENDOFINVITELIST, ":End of Invite List", "347" },
 /* 348 */
   { 0 },
 /* 349 */
@@ -742,7 +742,7 @@ static Numeric replyTable[] = {
 /* 354 */
   { RPL_WHOSPCRPL, "%s", "354" },
 /* 355 */
-  { RPL_DELNAMREPLY, "%s", "355"},
+  { RPL_DELNAMREPLY, "%s", "355" },
 /* 356 */
   { 0 },
 /* 357 */
@@ -754,23 +754,23 @@ static Numeric replyTable[] = {
 /* 360 */
   { 0 },
 /* 361 */
-  { RPL_KILLDONE, 0, "361" }, /* Not used */
+  { 0 },
 /* 362 */
-  { RPL_CLOSING, "%s :Fermeture par un Operateur", "362" },
+  { RPL_CLOSING, "%s :Operator enforced Close", "362" },
 /* 363 */
-  { RPL_CLOSEEND, "%d :Connexions fermées", "363" },
+  { RPL_CLOSEEND, "%d :Connections Closed", "363" },
 /* 364 */
-  { RPL_LINKS, "%s %s :%d P%u %s", "364" },
+  { RPL_LINKS, "%s %s :%u P%u %s", "364" },
 /* 365 */
-  { RPL_ENDOFLINKS, "%s :Fin de la liste /LINKS", "365" },
+  { RPL_ENDOFLINKS, "%s :End of /LINKS list.", "365" },
 /* 366 */
-  { RPL_ENDOFNAMES, "%s :Fin de la liste /NAMES", "366" },
+  { RPL_ENDOFNAMES, "%s :End of /NAMES list.", "366" },
 /* 367 */
   { RPL_BANLIST, "%s %s %s %Tu", "367" },
 /* 368 */
-  { RPL_ENDOFBANLIST, "%s :Fin de la banlist.", "368" },
+  { RPL_ENDOFBANLIST, "%s :End of Channel Ban List", "368" },
 /* 369 */
-  { RPL_ENDOFWHOWAS, "%s :Fin de la commande /WHOWAS", "369" },
+  { RPL_ENDOFWHOWAS, "%s :End of WHOWAS", "369" },
 /* 370 */
   { 0 },
 /* 371 */
@@ -778,31 +778,31 @@ static Numeric replyTable[] = {
 /* 372 */
   { RPL_MOTD, ":- %s", "372" },
 /* 373 */
-  { RPL_INFOSTART, ":Serveur INFO", "373" },
+  { 0 },
 /* 374 */
-  { RPL_ENDOFINFO, ":Fin de la commande /INFO", "374" },
+  { RPL_ENDOFINFO, ":End of /INFO list.", "374" },
 /* 375 */
   { RPL_MOTDSTART, ":- %s Message of the Day - ", "375" },
 /* 376 */
-  { RPL_ENDOFMOTD, ":Fin de la commande /MOTD", "376" },
+  { RPL_ENDOFMOTD, ":End of /MOTD command.", "376" },
 /* 377 */
   { 0 },
 /* 378 */
   { 0 },
 /* 379 */
-  { RPL_WHOISHIDING, "%s :utilise le mode +X (invisibilité totale)", "379" },
+  { 0 },
 /* 380 */
   { 0 },
 /* 381 */
-  { RPL_YOUREOPER, ":Vous êtes %s", "381" },
+  { RPL_YOUREOPER, ":You are now an IRC Operator", "381" },
 /* 382 */
   { RPL_REHASHING, "%s :Rehashing", "382" },
 /* 383 */
   { 0 },
 /* 384 */
-  { RPL_MYPORTIS, "%d :Le port pour le serveur local est", "384" }, /* not used */
+  { 0 },
 /* 385 */
-  { RPL_NOTOPERANYMORE, 0, "385" }, /* not used */
+  { 0 },
 /* 386 */
   { 0 },
 /* 387 */
@@ -812,7 +812,7 @@ static Numeric replyTable[] = {
 /* 389 */
   { 0 },
 /* 390 */
-  { RPL_SEXE, "%s :est un%s %s", "390" },
+  { 0 },
 /* 391 */
   { RPL_TIME, "%s %Tu %ld :%s", "391" },
 /* 392 */
@@ -824,61 +824,61 @@ static Numeric replyTable[] = {
 /* 395 */
   { 0 },
 /* 396 */
-  { RPL_HOSTHIDDEN, "%s.%s est maintenant votre hostname", "396" },
+  { RPL_HOSTHIDDEN, "%s :is now your user@host", "396" },
 /* 397 */
-  { RPL_SVSHOST, "%s est maintenant votre hostname", "397" },
+  { 0 },
 /* 398 */
-  { RPL_STATSSLINE, "%d %s %s %s %s", "398" },
+  { RPL_STATSSLINE, "%-2d %s %-8s %-20s %s", "398" },
 /* 399 */
-  { RPL_USINGSLINE, ":*** Vous utilisez une S-line", "399" },
+  { 0 },
 /* 400 */
-  { ERR_FIRSTERROR, "", "400" },
+  { 0 },
 /* 401 */
-  { ERR_NOSUCHNICK, "%s :Ce pseudonyme n'existe pas", "401" },
+  { ERR_NOSUCHNICK, "%s :No such nick", "401" },
 /* 402 */
-  { ERR_NOSUCHSERVER, "%s :Ce serveur n'existe pas", "402" },
+  { ERR_NOSUCHSERVER, "%s :No such server", "402" },
 /* 403 */
-  { ERR_NOSUCHCHANNEL, "%s :Ce salon n'existe pas", "403" },
+  { ERR_NOSUCHCHANNEL, "%s :No such channel", "403" },
 /* 404 */
-  { ERR_CANNOTSENDTOCHAN, "%s :Ne peut envoyer sur le salon", "404" },
+  { ERR_CANNOTSENDTOCHAN, "%s :Cannot send to channel", "404" },
 /* 405 */
-  { ERR_TOOMANYCHANNELS, "%s :Vous avez rejoint le nombre maximum de salons", "405" },
+  { ERR_TOOMANYCHANNELS, "%s :You have joined too many channels", "405" },
 /* 406 */
-  { ERR_WASNOSUCHNICK, "%s :Ce pseudonyme n'existait pas", "406" },
+  { ERR_WASNOSUCHNICK, "%s :There was no such nickname", "406" },
 /* 407 */
-  { ERR_TOOMANYTARGETS, "%s :Trop de cibles, le message n'a pas été envoyé.", "407" },
+  { ERR_TOOMANYTARGETS, "%s :Duplicate recipients. No message delivered", "407" },
 /* 408 */
-  { ERR_SEARCHNOMATCH, ":%s Pas de réponse trouvée", "408" },
+  { ERR_SEARCHNOMATCH, ":%s %s No matching record(s) found", "408" },
 /* 409 */
-  { ERR_NOORIGIN, ":Pas d'origine spécifiée", "409" },
+  { ERR_NOORIGIN, ":No origin specified", "409" },
 /* 410 */
-  { ERR_NONICKCHANGE, ":Changement de Pseudo interdit !", "410" },
+  { ERR_UNKNOWNCAPCMD, "%s :Unknown CAP subcommand", "410" },
 /* 411 */
-  { ERR_NORECIPIENT, ":Pas de cible spécifiée (%s)", "411" },
+  { ERR_NORECIPIENT, ":No recipient given (%s)", "411" },
 /* 412 */
-  { ERR_NOTEXTTOSEND, ":Pas de texte à envoyer", "412" },
+  { ERR_NOTEXTTOSEND, ":No text to send", "412" },
 /* 413 */
-  { ERR_NOTOPLEVEL, "%s :Pas de domaine toplevel spécifié", "413" },
+  { ERR_NOTOPLEVEL, "%s :No toplevel domain specified", "413" },
 /* 414 */
-  { ERR_WILDTOPLEVEL, "%s :Wilcards dans le domaine toplevel", "414" },
+  { ERR_WILDTOPLEVEL, "%s :Wildcard in toplevel Domain", "414" },
 /* 415 */
-  { ERR_NOMULTITARGET, "%s :Ne peut envoyer sur le salon (Pas de messages multi-cibles +T)", "415" },
- /* 416 */
-  { ERR_QUERYTOOLONG, "%s :Trop de lignes dans le résultat", "416" },
+  { 0 },
+/* 416 */
+  { ERR_QUERYTOOLONG, "%s :Too many lines in the output, restrict your query", "416" },
 /* 417 */
   { 0 },
 /* 418 */
-  { ERR_SVSCOM, ":Erreur sur la commande %s: %s", "418" },
+  { 0 },
 /* 419 */
   { 0 },
 /* 420 */
   { 0 },
 /* 421 */
-  { ERR_UNKNOWNCOMMAND, "%s :Commande inconnue", "421" },
+  { ERR_UNKNOWNCOMMAND, "%s :Unknown command", "421" },
 /* 422 */
-  { ERR_NOMOTD, ":Le fichier MOTD est introuvable", "422" },
+  { ERR_NOMOTD, ":MOTD File is missing", "422" },
 /* 423 */
-  { ERR_NOADMININFO, "%s :Pas d'informations adiministratives disponibles", "423" },
+  { ERR_NOADMININFO, "%s :No administrative info available", "423" },
 /* 424 */
   { 0 },
 /* 425 */
@@ -894,31 +894,31 @@ static Numeric replyTable[] = {
 /* 430 */
   { 0 },
 /* 431 */
-  { ERR_NONICKNAMEGIVEN, ":Pas de pseudonyme donné", "431" },
+  { ERR_NONICKNAMEGIVEN, ":No nickname given", "431" },
 /* 432 */
-  { ERR_ERRONEUSNICKNAME, "%s :Pseudonyme erroné", "432" },
+  { ERR_ERRONEUSNICKNAME, "%s :Erroneous Nickname", "432" },
 /* 433 */
-  { ERR_NICKNAMEINUSE, "%s :Pseudonyme déja utilisé", "433" },
+  { ERR_NICKNAMEINUSE, "%s :Nickname is already in use.", "433" },
 /* 434 */
-  { ERR_NORULES, ":RULES Fichier manquant", "434" },
+  { 0 },
 /* 435 */
   { 0 },
 /* 436 */
-  { ERR_NICKCOLLISION, "%s :Collision de Pseudonyme KILL", "436" },
+  { ERR_NICKCOLLISION, "%s :Nickname collision KILL", "436" },
 /* 437 */
-  { ERR_BANNICKCHANGE, "%s :Ne peut changer de pseudo étant banni sur un salon ou sur un salon modéré (+r/+R/+m)", "437" },
+  { ERR_BANNICKCHANGE, "%s :Cannot change nickname while banned on channel or channel is moderated", "437" },
 /* 438 */
-  { ERR_NICKTOOFAST, "%s :Changement de pseudo trop rapide. Attendez %d secondes.", "438" },
+  { ERR_NICKTOOFAST, "%s :Nick change too fast. Please wait %d seconds.", "438" },
 /* 439 */
-  { ERR_TARGETTOOFAST, "%s :Changement de cible trop rapide. Attendez %d seconds.", "439" },
+  { ERR_TARGETTOOFAST, "%s :Target change too fast. Please wait %d seconds.", "439" },
 /* 440 */
-  { ERR_SERVICESDOWN, "%s :Le Service demandé n'est pas disponible actuellement.", "440" },
+  { ERR_SERVICESDOWN, "%s :Services are currently unavailable.", "440" },
 /* 441 */
-  { ERR_USERNOTINCHANNEL, "%s %s :Ils ne sont pas sur ce salon", "441" },
+  { ERR_USERNOTINCHANNEL, "%s %s :They aren't on that channel", "441" },
 /* 442 */
-  { ERR_NOTONCHANNEL, "%s :Vous n'êtes pas dans ce salon", "442" },
+  { ERR_NOTONCHANNEL, "%s :You're not on that channel", "442" },
 /* 443 */
-  { ERR_USERONCHANNEL, "%s %s :est déja sur le salon", "443" },
+  { ERR_USERONCHANNEL, "%s %s :is already on channel", "443" },
 /* 444 */
   { 0 },
 /* 445 */
@@ -934,7 +934,7 @@ static Numeric replyTable[] = {
 /* 450 */
   { 0 },
 /* 451 */
-  { ERR_NOTREGISTERED, ":Vous n'êtes pas enregistré", "451" },
+  { ERR_NOTREGISTERED, ":You have not registered", "451" },
 /* 452 */
   { 0 },
 /* 453 */
@@ -954,19 +954,19 @@ static Numeric replyTable[] = {
 /* 460 */
   { 0 },
 /* 461 */
-  { ERR_NEEDMOREPARAMS, "%s :Pas assez de paramètres", "461" },
+  { ERR_NEEDMOREPARAMS, "%s :Not enough parameters", "461" },
 /* 462 */
-  { ERR_ALREADYREGISTRED, ":Vous ne devez pas vous ré-enregistrer", "462" },
+  { ERR_ALREADYREGISTRED, ":You may not reregister", "462" },
 /* 463 */
-  { ERR_NOPERMFORHOST, ":Votre host n'est pas privilégié", "463" },
+  { ERR_NOPERMFORHOST, ":Your host isn't among the privileged", "463" },
 /* 464 */
-  { ERR_PASSWDMISMATCH, ":Mot de passe incorrect", "464" },
+  { ERR_PASSWDMISMATCH, ":Password Incorrect", "464" },
 /* 465 */
-  { ERR_YOUREBANNEDCREEP, ":Vous êtes banni de ce serveur", "465" },
+  { ERR_YOUREBANNEDCREEP, ":You are banned from this server", "465" },
 /* 466 */
   { ERR_YOUWILLBEBANNED, "", "466" },
 /* 467 */
-  { ERR_KEYSET, "%s :Clef du salon déja mise.", "467" },
+  { ERR_KEYSET, "%s :Channel key already set", "467" },
 /* 468 */
   { ERR_INVALIDUSERNAME, 0, "468" },
 /* 469 */
@@ -974,69 +974,69 @@ static Numeric replyTable[] = {
 /* 470 */
   { 0 },
 /* 471 */
-  { ERR_CHANNELISFULL, "%s :Ne peut rejoindre le salon (+l)", "471" },
+  { ERR_CHANNELISFULL, "%s :Cannot join channel (+l)", "471" },
 /* 472 */
-  { ERR_UNKNOWNMODE, "%c :est un mode inconnu", "472" },
+  { ERR_UNKNOWNMODE, "%c :is unknown mode char to me", "472" },
 /* 473 */
-  { ERR_INVITEONLYCHAN, "%s :Ne peut rejoindre le salon (+i)", "473" },
+  { ERR_INVITEONLYCHAN, "%s :Cannot join channel (+i)", "473" },
 /* 474 */
-  { ERR_BANNEDFROMCHAN, "%s :Ne peut rejoindre le salon (+b)", "474" },
+  { ERR_BANNEDFROMCHAN, "%s :Cannot join channel (+b)", "474" },
 /* 475 */
-  { ERR_BADCHANNELKEY, "%s :Ne peut rejoindre le salon (+k)", "475" },
+  { ERR_BADCHANNELKEY, "%s :Cannot join channel (+k)", "475" },
 /* 476 */
-  { ERR_BADCHANMASK, "%s :Mauvais Channel Mask", "476" },
+  { ERR_BADCHANMASK, "%s :Bad Channel Mask", "476" },
 /* 477 */
-  { ERR_NEEDREGGEDNICK, "%s :Ne peut rejoindre le salon (+r)", "477" },
+  { ERR_NEEDREGGEDNICK, "%s :Cannot join channel (+r)", "477" },
 /* 478 */
-  { ERR_BANLISTFULL, "%s %s :Ne peut bannir/ignorer, la liste est pleine", "478" },
+  { ERR_BANLISTFULL, "%s %s :Channel ban/ignore list is full", "478" },
 /* 479 */
-  { ERR_BADCHANNAME, "%s :Salon Fermé (Raison: %s)", "479" },
+  { ERR_BADCHANNAME, "%s :Cannot join channel (access denied: %s)", "479" },
 /* 480 */
-  { ERR_NOKICKAUTORIZED, ":%s", "480" },
+  { 0 },
 /* 481 */
-  { ERR_NOPRIVILEGES, ":Permission refusée: Privilèges insuffisants", "481" },
+  { ERR_NOPRIVILEGES, ":Permission Denied: Insufficient privileges", "481" },
 /* 482 */
-  { ERR_CHANOPRIVSNEEDED, "%s :Vous n'êtes pas opérateur sur le salon", "482" },
+  { ERR_CHANOPRIVSNEEDED, "%s :You're not channel operator", "482" },
 /* 483 */
-  { ERR_CANTKILLSERVER, ":Vous ne pouvez pas killer un serveur!", "483" },
+  { ERR_CANTKILLSERVER, ":You cant kill a server!", "483" },
 /* 484 */
-  { ERR_ISCHANSERVICE, "%s %s :Vous ne pouvez pas deopper, kicker, ou killer un Service", "484" },
+  { ERR_ISCHANSERVICE, "%s %s :Cannot kill, kick or deop a network service", "484" },
 /* 485 */
-  { ERR_ISGODMODE, "%s %s :Vous ne pouvez pas deopper, kicker, ou killer un Ircop", "485" },
+  { 0 },
 /* 486 */
-  { ERR_CANTSENDPRIVATE, "%s :Vous ne pouvez pas envoyer de message privés à cette personne", "486" },
+  { ERR_ACCOUNTONLY, "%s :You have to be authed on a Channel Service", "486" },
 /* 487 */
-  { ERR_ISHELPER, "%s %s :Vous ne pouvez pas kicker un Helpeur", "487" },
+  { 0 },
 /* 488 */
   { 0 },
 /* 489 */
-  { ERR_VOICENEEDED, "%s :Vous n'êtes ni voice ni op sur le salon", "489" },
+  { ERR_VOICENEEDED, "%s :You're neither voiced nor channel operator", "489" },
 /* 490 */
   { 0 },
 /* 491 */
-  { ERR_NOOPERHOST, ":Pas de O-Line pour votre host", "491" },
+  { ERR_NOOPERHOST, ":No Operator block for your host", "491" },
 /* 492 */
   { 0 },
 /* 493 */
-  { ERR_NOFEATURE, "%s :Cette F-Line n'existe pas", "493" },
+  { ERR_NOFEATURE, "%s :No such feature", "493" },
 /* 494 */
-  { ERR_BADFEATVALUE, "%s :Mauvaise valeur pour la F-Line %s", "494" },
+  { ERR_BADFEATVALUE, "%s :Bad value for feature %s", "494" },
 /* 495 */
-  { ERR_BADLOGTYPE, "%s :Ce type de log n'existe pas", "495" },
+  { ERR_BADLOGTYPE, "%s :No such log type", "495" },
 /* 496 */
-  { ERR_BADLOGSYS, "%s :Ce type de log subsystem n'existe pas", "496" },
+  { ERR_BADLOGSYS, "%s :No such log subsystem", "496" },
 /* 497 */
-  { ERR_BADLOGVALUE, "%s :Mauvaise valeur pour ce type de log", "497" },
-/* 498 */
-  { ERR_ISOPERLCHAN, "%s %s :Vous ne pouvez pas deopper, kicker, ou killer un IRC Operateur sur un salon local", "498" },
+  { ERR_BADLOGVALUE, "%s :Bad value for log type", "497" },
+/* 498 */ /* Note: à la base c'était pour les salons locaux, mais elle n'a plus l'air d'etre utilisée (?) */
+  { ERR_ISOPERLCHAN, "%s %s :Cannot kick or deop a protected IRC Operator", "498" },
 /* 499 */
   { 0 },
 /* 500 */
   { 0 },
 /* 501 */
-  { ERR_UMODEUNKNOWNFLAG, "%c :Usermode inconnu", "501" },
+  { ERR_UMODEUNKNOWNFLAG, "%c :Unknown user MODE flag", "501" },
 /* 502 */
-  { ERR_USERSDONTMATCH, ":Ne peut changer les modes des autres users", "502" },
+  { ERR_USERSDONTMATCH, ":Cant change mode for other users", "502" },
 /* 503 */
   { 0 },
 /* 504 */
@@ -1054,25 +1054,25 @@ static Numeric replyTable[] = {
 /* 510 */
   { 0 },
 /* 511 */
-  { ERR_SILELISTFULL, "%s :Votre silence list est pleine", "511" },
+  { ERR_SILELISTFULL, "%s :Your silence list is full", "511" },
 /* 512 */
-  { ERR_NOSUCHGLINE, "%s :G-Line inconnu", "512" },
+  { ERR_NOSUCHGLINE, "%s :No such gline", "512" },
 /* 513 */
   { ERR_BADPING, 0, "513" },
 /* 514 */
-  { ERR_NOSUCHJUPE, "%s :Jupe inconnu", "514" },
+  { ERR_NOSUCHJUPE, "%s :No such jupe", "514" },
 /* 515 */
-  { ERR_BADEXPIRE, "%Tu :Expire time erroné", "515" },
+  { ERR_BADEXPIRE, "%Tu :Bad expire time", "515" },
 /* 516 */
-  { ERR_DONTCHEAT, ":On ne triche pas !", "516" },
+  { ERR_DONTCHEAT, " :Don't Cheat.", "516" },
 /* 517 */
-  { ERR_DISABLED, "%s :Commande désactivée.", "517" },
+  { ERR_DISABLED, "%s :Command disabled.", "517" },
 /* 518 */
-  { ERR_LONGMASK, " :Le mask est trop long", "518" },
+  { ERR_LONGMASK, " :Mask is too long", "518" },
 /* 519 */
-  { ERR_TOOMANYUSERS, "%d :Trop d'users sont affectés par le mask", "519" },
+  { ERR_TOOMANYUSERS, "%d :Too many users affected by mask", "519" },
 /* 520 */
-  { ERR_OPERONLY, "%s :Ne peut rejoindre le salon (+O: nécessite d'être un IRC Opérateur)", "520" },
+  { ERR_MASKTOOWIDE, "%s :Mask is too wide", "520" },
 /* 521 */
   { 0 },
 /* 522 */
@@ -1080,33 +1080,33 @@ static Numeric replyTable[] = {
 /* 523 */
   { 0 },
 /* 524 */
-  { ERR_QUARANTINED, "%s :%s", "524" },
+  { ERR_QUARANTINED, "%s :Channel is quarantined : %s", "524" },
 /* 525 */
-  { RPL_OMOTDSTART, ":%s MOTD IRC Opérateur", "525" },
+  { 0 },
 /* 526 */
-  { RPL_OMOTD, ":- %s", "526" },
+  { 0 },
 /* 527 */
-  { RPL_ENDOFOMOTD, ":Fin de la MOTD IRC Opérateur.", "527" },
+  { 0 },
 /* 528 */
-  { ERR_INVUSERORPASS, ":nom d'utilisateur / mot de passe invalide", "528" },
+  { 0 },
 /* 529 */
   { 0 },
 /* 530 */
-  { ERR_BADHOSTMASK, "%s :Username/Hostmask invalide", "530" },
+  { ERR_BADHOSTMASK, "%s :Invalid username/hostmask", "530" },
 /* 531 */
-  { ERR_HOSTUNAVAIL, "%s :Host non trouvée", "531" },
+  { ERR_HOSTUNAVAIL, "%s :sethost not found", "531" },
 /* 532 */
-  { ERR_HOSTALREADYSET, ":Un VHOST a déjà été défini", "532" },
+  { 0 },
 /* 533 */
-  { ERR_VHOSTBADSIZE, ":%s trop %s (max. %d caractères)", "533" },
+  { 0 },
 /* 534 */
-  { ERR_BADHOST, "%s : Hostname invalide", "534" },
+  { 0 },
 /* 535 */
-  { RPL_RULESSTART, ":- %s Network Rules - ", "535" },
+  { 0 },
 /* 536 */
-  { RPL_RULES, ":- %s", "536" },
+  { 0 },
 /* 537 */
-  { RPL_ENDOFRULES, ":Fin de la liste /RULES ", "537" },
+  { 0 },
 /* 538 */
   { 0 },
 /* 539 */
@@ -1116,13 +1116,13 @@ static Numeric replyTable[] = {
 /* 541 */
   { 0 },
 /* 542 */
-  { RPL_STATSSHUN, "%c %s%s%s%s%s %Tu :%s", "542" },
+  { 0 },
 /* 543 */
-  { ERR_NOSUCHSHUN, "%s :Aucun SHUN trouvé", "543" },
+  { 0 },
 /* 544 */
-  { RPL_SLIST, "%s%s%s%s%s %Tu %s %c :%s", "544" },
+  { 0 },
 /* 545 */
-  { RPL_ENDOFSLIST, ":Fin de la liste SHUN", "545" },
+  { 0 },
 /* 546 */
   { 0 },
 /* 547 */
@@ -1152,21 +1152,21 @@ static Numeric replyTable[] = {
 /* 559 */
   { 0 },
 /* 560 */
-  { 0 },
+  { ERR_NOTLOWEROPLEVEL, "%s %s %hu %hu :Cannot %s someone with %s op-level", "560" },
 /* 561 */
-  { 0 },
+  { ERR_NOTMANAGER, "%s :You must be channel Admin to add or remove a password. Use /JOIN %s <AdminPass>.", "561" },
 /* 562 */
-  { 0 },
+  { ERR_CHANSECURED, "%s :Channel is older than 48 hours and secured. Cannot change Admin pass anymore", "562" },
 /* 563 */
-  { 0 },
+  { ERR_UPASSSET, "%s :Cannot remove Admin pass (+A) while User pass (+U) is still set.  First use /MODE %s -U <userpass>", "563" },
 /* 564 */
-  { 0 },
+  { ERR_UPASSNOTSET, "%s :Cannot set user pass (+U) until Admin pass (+A) is set.  First use /MODE %s +A <adminpass>", "564" },
 /* 565 */
   { 0 },
 /* 566 */
-  { 0 },
+  { ERR_NOMANAGER, "%s :Re-create the channel. The channel must be completely empty for a period of %s before it can be recreated.", "566" },
 /* 567 */
-  { 0 },
+  { ERR_UPASS_SAME_APASS, "%s :Cannot use the same pass for both admin (+A) and user (+U) pass.", "567" },
 /* 568 */
   { 0 },
 /* 569 */
@@ -1233,6 +1233,10 @@ static Numeric replyTable[] = {
   { 0 }
 };
 
+/** Return a pointer to the Numeric for a particular code.
+ * @param n %Numeric to look up.
+ * @return Numeric structure.
+ */
 const struct Numeric* get_error_numeric(int n)
 {
   assert(0 < n);
@@ -1242,244 +1246,13 @@ const struct Numeric* get_error_numeric(int n)
   return &replyTable[n];
 }
 
-static char numbuff[512];
-
-/* *INDENT-OFF* */
-
-static const char atoi_tab[4000] = {
-    '0','0','0',0, '0','0','1',0, '0','0','2',0, '0','0','3',0, '0','0','4',0,
-    '0','0','5',0, '0','0','6',0, '0','0','7',0, '0','0','8',0, '0','0','9',0,
-    '0','1','0',0, '0','1','1',0, '0','1','2',0, '0','1','3',0, '0','1','4',0,
-    '0','1','5',0, '0','1','6',0, '0','1','7',0, '0','1','8',0, '0','1','9',0,
-    '0','2','0',0, '0','2','1',0, '0','2','2',0, '0','2','3',0, '0','2','4',0,
-    '0','2','5',0, '0','2','6',0, '0','2','7',0, '0','2','8',0, '0','2','9',0,
-    '0','3','0',0, '0','3','1',0, '0','3','2',0, '0','3','3',0, '0','3','4',0,
-    '0','3','5',0, '0','3','6',0, '0','3','7',0, '0','3','8',0, '0','3','9',0,
-    '0','4','0',0, '0','4','1',0, '0','4','2',0, '0','4','3',0, '0','4','4',0,
-    '0','4','5',0, '0','4','6',0, '0','4','7',0, '0','4','8',0, '0','4','9',0,
-    '0','5','0',0, '0','5','1',0, '0','5','2',0, '0','5','3',0, '0','5','4',0,
-    '0','5','5',0, '0','5','6',0, '0','5','7',0, '0','5','8',0, '0','5','9',0,
-    '0','6','0',0, '0','6','1',0, '0','6','2',0, '0','6','3',0, '0','6','4',0,
-    '0','6','5',0, '0','6','6',0, '0','6','7',0, '0','6','8',0, '0','6','9',0,
-    '0','7','0',0, '0','7','1',0, '0','7','2',0, '0','7','3',0, '0','7','4',0,
-    '0','7','5',0, '0','7','6',0, '0','7','7',0, '0','7','8',0, '0','7','9',0,
-    '0','8','0',0, '0','8','1',0, '0','8','2',0, '0','8','3',0, '0','8','4',0,
-    '0','8','5',0, '0','8','6',0, '0','8','7',0, '0','8','8',0, '0','8','9',0,
-    '0','9','0',0, '0','9','1',0, '0','9','2',0, '0','9','3',0, '0','9','4',0,
-    '0','9','5',0, '0','9','6',0, '0','9','7',0, '0','9','8',0, '0','9','9',0,
-    '1','0','0',0, '1','0','1',0, '1','0','2',0, '1','0','3',0, '1','0','4',0,
-    '1','0','5',0, '1','0','6',0, '1','0','7',0, '1','0','8',0, '1','0','9',0,
-    '1','1','0',0, '1','1','1',0, '1','1','2',0, '1','1','3',0, '1','1','4',0,
-    '1','1','5',0, '1','1','6',0, '1','1','7',0, '1','1','8',0, '1','1','9',0,
-    '1','2','0',0, '1','2','1',0, '1','2','2',0, '1','2','3',0, '1','2','4',0,
-    '1','2','5',0, '1','2','6',0, '1','2','7',0, '1','2','8',0, '1','2','9',0,
-    '1','3','0',0, '1','3','1',0, '1','3','2',0, '1','3','3',0, '1','3','4',0,
-    '1','3','5',0, '1','3','6',0, '1','3','7',0, '1','3','8',0, '1','3','9',0,
-    '1','4','0',0, '1','4','1',0, '1','4','2',0, '1','4','3',0, '1','4','4',0,
-    '1','4','5',0, '1','4','6',0, '1','4','7',0, '1','4','8',0, '1','4','9',0,
-    '1','5','0',0, '1','5','1',0, '1','5','2',0, '1','5','3',0, '1','5','4',0,
-    '1','5','5',0, '1','5','6',0, '1','5','7',0, '1','5','8',0, '1','5','9',0,
-    '1','6','0',0, '1','6','1',0, '1','6','2',0, '1','6','3',0, '1','6','4',0,
-    '1','6','5',0, '1','6','6',0, '1','6','7',0, '1','6','8',0, '1','6','9',0,
-    '1','7','0',0, '1','7','1',0, '1','7','2',0, '1','7','3',0, '1','7','4',0,
-    '1','7','5',0, '1','7','6',0, '1','7','7',0, '1','7','8',0, '1','7','9',0,
-    '1','8','0',0, '1','8','1',0, '1','8','2',0, '1','8','3',0, '1','8','4',0,
-    '1','8','5',0, '1','8','6',0, '1','8','7',0, '1','8','8',0, '1','8','9',0,
-    '1','9','0',0, '1','9','1',0, '1','9','2',0, '1','9','3',0, '1','9','4',0,
-    '1','9','5',0, '1','9','6',0, '1','9','7',0, '1','9','8',0, '1','9','9',0,
-    '2','0','0',0, '2','0','1',0, '2','0','2',0, '2','0','3',0, '2','0','4',0,
-    '2','0','5',0, '2','0','6',0, '2','0','7',0, '2','0','8',0, '2','0','9',0,
-    '2','1','0',0, '2','1','1',0, '2','1','2',0, '2','1','3',0, '2','1','4',0,
-    '2','1','5',0, '2','1','6',0, '2','1','7',0, '2','1','8',0, '2','1','9',0,
-    '2','2','0',0, '2','2','1',0, '2','2','2',0, '2','2','3',0, '2','2','4',0,
-    '2','2','5',0, '2','2','6',0, '2','2','7',0, '2','2','8',0, '2','2','9',0,
-    '2','3','0',0, '2','3','1',0, '2','3','2',0, '2','3','3',0, '2','3','4',0,
-    '2','3','5',0, '2','3','6',0, '2','3','7',0, '2','3','8',0, '2','3','9',0,
-    '2','4','0',0, '2','4','1',0, '2','4','2',0, '2','4','3',0, '2','4','4',0,
-    '2','4','5',0, '2','4','6',0, '2','4','7',0, '2','4','8',0, '2','4','9',0,
-    '2','5','0',0, '2','5','1',0, '2','5','2',0, '2','5','3',0, '2','5','4',0,
-    '2','5','5',0, '2','5','6',0, '2','5','7',0, '2','5','8',0, '2','5','9',0,
-    '2','6','0',0, '2','6','1',0, '2','6','2',0, '2','6','3',0, '2','6','4',0,
-    '2','6','5',0, '2','6','6',0, '2','6','7',0, '2','6','8',0, '2','6','9',0,
-    '2','7','0',0, '2','7','1',0, '2','7','2',0, '2','7','3',0, '2','7','4',0,
-    '2','7','5',0, '2','7','6',0, '2','7','7',0, '2','7','8',0, '2','7','9',0,
-    '2','8','0',0, '2','8','1',0, '2','8','2',0, '2','8','3',0, '2','8','4',0,
-    '2','8','5',0, '2','8','6',0, '2','8','7',0, '2','8','8',0, '2','8','9',0,
-    '2','9','0',0, '2','9','1',0, '2','9','2',0, '2','9','3',0, '2','9','4',0,
-    '2','9','5',0, '2','9','6',0, '2','9','7',0, '2','9','8',0, '2','9','9',0,
-    '3','0','0',0, '3','0','1',0, '3','0','2',0, '3','0','3',0, '3','0','4',0,
-    '3','0','5',0, '3','0','6',0, '3','0','7',0, '3','0','8',0, '3','0','9',0,
-    '3','1','0',0, '3','1','1',0, '3','1','2',0, '3','1','3',0, '3','1','4',0,
-    '3','1','5',0, '3','1','6',0, '3','1','7',0, '3','1','8',0, '3','1','9',0,
-    '3','2','0',0, '3','2','1',0, '3','2','2',0, '3','2','3',0, '3','2','4',0,
-    '3','2','5',0, '3','2','6',0, '3','2','7',0, '3','2','8',0, '3','2','9',0,
-    '3','3','0',0, '3','3','1',0, '3','3','2',0, '3','3','3',0, '3','3','4',0,
-    '3','3','5',0, '3','3','6',0, '3','3','7',0, '3','3','8',0, '3','3','9',0,
-    '3','4','0',0, '3','4','1',0, '3','4','2',0, '3','4','3',0, '3','4','4',0,
-    '3','4','5',0, '3','4','6',0, '3','4','7',0, '3','4','8',0, '3','4','9',0,
-    '3','5','0',0, '3','5','1',0, '3','5','2',0, '3','5','3',0, '3','5','4',0,
-    '3','5','5',0, '3','5','6',0, '3','5','7',0, '3','5','8',0, '3','5','9',0,
-    '3','6','0',0, '3','6','1',0, '3','6','2',0, '3','6','3',0, '3','6','4',0,
-    '3','6','5',0, '3','6','6',0, '3','6','7',0, '3','6','8',0, '3','6','9',0,
-    '3','7','0',0, '3','7','1',0, '3','7','2',0, '3','7','3',0, '3','7','4',0,
-    '3','7','5',0, '3','7','6',0, '3','7','7',0, '3','7','8',0, '3','7','9',0,
-    '3','8','0',0, '3','8','1',0, '3','8','2',0, '3','8','3',0, '3','8','4',0,
-    '3','8','5',0, '3','8','6',0, '3','8','7',0, '3','8','8',0, '3','8','9',0,
-    '3','9','0',0, '3','9','1',0, '3','9','2',0, '3','9','3',0, '3','9','4',0,
-    '3','9','5',0, '3','9','6',0, '3','9','7',0, '3','9','8',0, '3','9','9',0,
-    '4','0','0',0, '4','0','1',0, '4','0','2',0, '4','0','3',0, '4','0','4',0,
-    '4','0','5',0, '4','0','6',0, '4','0','7',0, '4','0','8',0, '4','0','9',0,
-    '4','1','0',0, '4','1','1',0, '4','1','2',0, '4','1','3',0, '4','1','4',0,
-    '4','1','5',0, '4','1','6',0, '4','1','7',0, '4','1','8',0, '4','1','9',0,
-    '4','2','0',0, '4','2','1',0, '4','2','2',0, '4','2','3',0, '4','2','4',0,
-    '4','2','5',0, '4','2','6',0, '4','2','7',0, '4','2','8',0, '4','2','9',0,
-    '4','3','0',0, '4','3','1',0, '4','3','2',0, '4','3','3',0, '4','3','4',0,
-    '4','3','5',0, '4','3','6',0, '4','3','7',0, '4','3','8',0, '4','3','9',0,
-    '4','4','0',0, '4','4','1',0, '4','4','2',0, '4','4','3',0, '4','4','4',0,
-    '4','4','5',0, '4','4','6',0, '4','4','7',0, '4','4','8',0, '4','4','9',0,
-    '4','5','0',0, '4','5','1',0, '4','5','2',0, '4','5','3',0, '4','5','4',0,
-    '4','5','5',0, '4','5','6',0, '4','5','7',0, '4','5','8',0, '4','5','9',0,
-    '4','6','0',0, '4','6','1',0, '4','6','2',0, '4','6','3',0, '4','6','4',0,
-    '4','6','5',0, '4','6','6',0, '4','6','7',0, '4','6','8',0, '4','6','9',0,
-    '4','7','0',0, '4','7','1',0, '4','7','2',0, '4','7','3',0, '4','7','4',0,
-    '4','7','5',0, '4','7','6',0, '4','7','7',0, '4','7','8',0, '4','7','9',0,
-    '4','8','0',0, '4','8','1',0, '4','8','2',0, '4','8','3',0, '4','8','4',0,
-    '4','8','5',0, '4','8','6',0, '4','8','7',0, '4','8','8',0, '4','8','9',0,
-    '4','9','0',0, '4','9','1',0, '4','9','2',0, '4','9','3',0, '4','9','4',0,
-    '4','9','5',0, '4','9','6',0, '4','9','7',0, '4','9','8',0, '4','9','9',0,
-    '5','0','0',0, '5','0','1',0, '5','0','2',0, '5','0','3',0, '5','0','4',0,
-    '5','0','5',0, '5','0','6',0, '5','0','7',0, '5','0','8',0, '5','0','9',0,
-    '5','1','0',0, '5','1','1',0, '5','1','2',0, '5','1','3',0, '5','1','4',0,
-    '5','1','5',0, '5','1','6',0, '5','1','7',0, '5','1','8',0, '5','1','9',0,
-    '5','2','0',0, '5','2','1',0, '5','2','2',0, '5','2','3',0, '5','2','4',0,
-    '5','2','5',0, '5','2','6',0, '5','2','7',0, '5','2','8',0, '5','2','9',0,
-    '5','3','0',0, '5','3','1',0, '5','3','2',0, '5','3','3',0, '5','3','4',0,
-    '5','3','5',0, '5','3','6',0, '5','3','7',0, '5','3','8',0, '5','3','9',0,
-    '5','4','0',0, '5','4','1',0, '5','4','2',0, '5','4','3',0, '5','4','4',0,
-    '5','4','5',0, '5','4','6',0, '5','4','7',0, '5','4','8',0, '5','4','9',0,
-    '5','5','0',0, '5','5','1',0, '5','5','2',0, '5','5','3',0, '5','5','4',0,
-    '5','5','5',0, '5','5','6',0, '5','5','7',0, '5','5','8',0, '5','5','9',0,
-    '5','6','0',0, '5','6','1',0, '5','6','2',0, '5','6','3',0, '5','6','4',0,
-    '5','6','5',0, '5','6','6',0, '5','6','7',0, '5','6','8',0, '5','6','9',0,
-    '5','7','0',0, '5','7','1',0, '5','7','2',0, '5','7','3',0, '5','7','4',0,
-    '5','7','5',0, '5','7','6',0, '5','7','7',0, '5','7','8',0, '5','7','9',0,
-    '5','8','0',0, '5','8','1',0, '5','8','2',0, '5','8','3',0, '5','8','4',0,
-    '5','8','5',0, '5','8','6',0, '5','8','7',0, '5','8','8',0, '5','8','9',0,
-    '5','9','0',0, '5','9','1',0, '5','9','2',0, '5','9','3',0, '5','9','4',0,
-    '5','9','5',0, '5','9','6',0, '5','9','7',0, '5','9','8',0, '5','9','9',0,
-    '6','0','0',0, '6','0','1',0, '6','0','2',0, '6','0','3',0, '6','0','4',0,
-    '6','0','5',0, '6','0','6',0, '6','0','7',0, '6','0','8',0, '6','0','9',0,
-    '6','1','0',0, '6','1','1',0, '6','1','2',0, '6','1','3',0, '6','1','4',0,
-    '6','1','5',0, '6','1','6',0, '6','1','7',0, '6','1','8',0, '6','1','9',0,
-    '6','2','0',0, '6','2','1',0, '6','2','2',0, '6','2','3',0, '6','2','4',0,
-    '6','2','5',0, '6','2','6',0, '6','2','7',0, '6','2','8',0, '6','2','9',0,
-    '6','3','0',0, '6','3','1',0, '6','3','2',0, '6','3','3',0, '6','3','4',0,
-    '6','3','5',0, '6','3','6',0, '6','3','7',0, '6','3','8',0, '6','3','9',0,
-    '6','4','0',0, '6','4','1',0, '6','4','2',0, '6','4','3',0, '6','4','4',0,
-    '6','4','5',0, '6','4','6',0, '6','4','7',0, '6','4','8',0, '6','4','9',0,
-    '6','5','0',0, '6','5','1',0, '6','5','2',0, '6','5','3',0, '6','5','4',0,
-    '6','5','5',0, '6','5','6',0, '6','5','7',0, '6','5','8',0, '6','5','9',0,
-    '6','6','0',0, '6','6','1',0, '6','6','2',0, '6','6','3',0, '6','6','4',0,
-    '6','6','5',0, '6','6','6',0, '6','6','7',0, '6','6','8',0, '6','6','9',0,
-    '6','7','0',0, '6','7','1',0, '6','7','2',0, '6','7','3',0, '6','7','4',0,
-    '6','7','5',0, '6','7','6',0, '6','7','7',0, '6','7','8',0, '6','7','9',0,
-    '6','8','0',0, '6','8','1',0, '6','8','2',0, '6','8','3',0, '6','8','4',0,
-    '6','8','5',0, '6','8','6',0, '6','8','7',0, '6','8','8',0, '6','8','9',0,
-    '6','9','0',0, '6','9','1',0, '6','9','2',0, '6','9','3',0, '6','9','4',0,
-    '6','9','5',0, '6','9','6',0, '6','9','7',0, '6','9','8',0, '6','9','9',0,
-    '7','0','0',0, '7','0','1',0, '7','0','2',0, '7','0','3',0, '7','0','4',0,
-    '7','0','5',0, '7','0','6',0, '7','0','7',0, '7','0','8',0, '7','0','9',0,
-    '7','1','0',0, '7','1','1',0, '7','1','2',0, '7','1','3',0, '7','1','4',0,
-    '7','1','5',0, '7','1','6',0, '7','1','7',0, '7','1','8',0, '7','1','9',0,
-    '7','2','0',0, '7','2','1',0, '7','2','2',0, '7','2','3',0, '7','2','4',0,
-    '7','2','5',0, '7','2','6',0, '7','2','7',0, '7','2','8',0, '7','2','9',0,
-    '7','3','0',0, '7','3','1',0, '7','3','2',0, '7','3','3',0, '7','3','4',0,
-    '7','3','5',0, '7','3','6',0, '7','3','7',0, '7','3','8',0, '7','3','9',0,
-    '7','4','0',0, '7','4','1',0, '7','4','2',0, '7','4','3',0, '7','4','4',0,
-    '7','4','5',0, '7','4','6',0, '7','4','7',0, '7','4','8',0, '7','4','9',0,
-    '7','5','0',0, '7','5','1',0, '7','5','2',0, '7','5','3',0, '7','5','4',0,
-    '7','5','5',0, '7','5','6',0, '7','5','7',0, '7','5','8',0, '7','5','9',0,
-    '7','6','0',0, '7','6','1',0, '7','6','2',0, '7','6','3',0, '7','6','4',0,
-    '7','6','5',0, '7','6','6',0, '7','6','7',0, '7','6','8',0, '7','6','9',0,
-    '7','7','0',0, '7','7','1',0, '7','7','2',0, '7','7','3',0, '7','7','4',0,
-    '7','7','5',0, '7','7','6',0, '7','7','7',0, '7','7','8',0, '7','7','9',0,
-    '7','8','0',0, '7','8','1',0, '7','8','2',0, '7','8','3',0, '7','8','4',0,
-    '7','8','5',0, '7','8','6',0, '7','8','7',0, '7','8','8',0, '7','8','9',0,
-    '7','9','0',0, '7','9','1',0, '7','9','2',0, '7','9','3',0, '7','9','4',0,
-    '7','9','5',0, '7','9','6',0, '7','9','7',0, '7','9','8',0, '7','9','9',0,
-    '8','0','0',0, '8','0','1',0, '8','0','2',0, '8','0','3',0, '8','0','4',0,
-    '8','0','5',0, '8','0','6',0, '8','0','7',0, '8','0','8',0, '8','0','9',0,
-    '8','1','0',0, '8','1','1',0, '8','1','2',0, '8','1','3',0, '8','1','4',0,
-    '8','1','5',0, '8','1','6',0, '8','1','7',0, '8','1','8',0, '8','1','9',0,
-    '8','2','0',0, '8','2','1',0, '8','2','2',0, '8','2','3',0, '8','2','4',0,
-    '8','2','5',0, '8','2','6',0, '8','2','7',0, '8','2','8',0, '8','2','9',0,
-    '8','3','0',0, '8','3','1',0, '8','3','2',0, '8','3','3',0, '8','3','4',0,
-    '8','3','5',0, '8','3','6',0, '8','3','7',0, '8','3','8',0, '8','3','9',0,
-    '8','4','0',0, '8','4','1',0, '8','4','2',0, '8','4','3',0, '8','4','4',0,
-    '8','4','5',0, '8','4','6',0, '8','4','7',0, '8','4','8',0, '8','4','9',0,
-    '8','5','0',0, '8','5','1',0, '8','5','2',0, '8','5','3',0, '8','5','4',0,
-    '8','5','5',0, '8','5','6',0, '8','5','7',0, '8','5','8',0, '8','5','9',0,
-    '8','6','0',0, '8','6','1',0, '8','6','2',0, '8','6','3',0, '8','6','4',0,
-    '8','6','5',0, '8','6','6',0, '8','6','7',0, '8','6','8',0, '8','6','9',0,
-    '8','7','0',0, '8','7','1',0, '8','7','2',0, '8','7','3',0, '8','7','4',0,
-    '8','7','5',0, '8','7','6',0, '8','7','7',0, '8','7','8',0, '8','7','9',0,
-    '8','8','0',0, '8','8','1',0, '8','8','2',0, '8','8','3',0, '8','8','4',0,
-    '8','8','5',0, '8','8','6',0, '8','8','7',0, '8','8','8',0, '8','8','9',0,
-    '8','9','0',0, '8','9','1',0, '8','9','2',0, '8','9','3',0, '8','9','4',0,
-    '8','9','5',0, '8','9','6',0, '8','9','7',0, '8','9','8',0, '8','9','9',0,
-    '9','0','0',0, '9','0','1',0, '9','0','2',0, '9','0','3',0, '9','0','4',0,
-    '9','0','5',0, '9','0','6',0, '9','0','7',0, '9','0','8',0, '9','0','9',0,
-    '9','1','0',0, '9','1','1',0, '9','1','2',0, '9','1','3',0, '9','1','4',0,
-    '9','1','5',0, '9','1','6',0, '9','1','7',0, '9','1','8',0, '9','1','9',0,
-    '9','2','0',0, '9','2','1',0, '9','2','2',0, '9','2','3',0, '9','2','4',0,
-    '9','2','5',0, '9','2','6',0, '9','2','7',0, '9','2','8',0, '9','2','9',0,
-    '9','3','0',0, '9','3','1',0, '9','3','2',0, '9','3','3',0, '9','3','4',0,
-    '9','3','5',0, '9','3','6',0, '9','3','7',0, '9','3','8',0, '9','3','9',0,
-    '9','4','0',0, '9','4','1',0, '9','4','2',0, '9','4','3',0, '9','4','4',0,
-    '9','4','5',0, '9','4','6',0, '9','4','7',0, '9','4','8',0, '9','4','9',0,
-    '9','5','0',0, '9','5','1',0, '9','5','2',0, '9','5','3',0, '9','5','4',0,
-    '9','5','5',0, '9','5','6',0, '9','5','7',0, '9','5','8',0, '9','5','9',0,
-    '9','6','0',0, '9','6','1',0, '9','6','2',0, '9','6','3',0, '9','6','4',0,
-    '9','6','5',0, '9','6','6',0, '9','6','7',0, '9','6','8',0, '9','6','9',0,
-    '9','7','0',0, '9','7','1',0, '9','7','2',0, '9','7','3',0, '9','7','4',0,
-    '9','7','5',0, '9','7','6',0, '9','7','7',0, '9','7','8',0, '9','7','9',0,
-    '9','8','0',0, '9','8','1',0, '9','8','2',0, '9','8','3',0, '9','8','4',0,
-    '9','8','5',0, '9','8','6',0, '9','8','7',0, '9','8','8',0, '9','8','9',0,
-    '9','9','0',0, '9','9','1',0, '9','9','2',0, '9','9','3',0, '9','9','4',0,
-    '9','9','5',0, '9','9','6',0, '9','9','7',0, '9','9','8',0, '9','9','9',0 };
-
-/* *INDENT-ON* */
-
-/* "inline" */
-#define prepbuf(buffer, num, tail)                      \
-{                                                       \
-  char *s = buffer + 4;                 \
-  const char *ap = atoi_tab + (num << 2);       \
-                                                        \
-  strcpy(buffer, ":%s 000 %s ");                        \
-  *s++ = *ap++;                                         \
-  *s++ = *ap++;                                         \
-  *s = *ap;                                             \
-  strcpy(s + 5, tail);                                  \
-}
-
-
-char* err_str(int n)
-{
-  Numeric* p;
-
-  assert(0 < n);
-  assert(n < ERR_LASTERROR);
-  assert(0 != replyTable[n].value);
-
-  p = &replyTable[n];
-  prepbuf(numbuff, p->value, p->format);
-
-  return numbuff;
-}
-
+/** Return a format string for a numeric response.
+ * @param n %Numeric to look up.
+ * @return Pointer to a static buffer containing the format string.
+ */
 char* rpl_str(int n)
 {
+  static char numbuff[512];
   Numeric* p;
 
   assert(0 < n);
@@ -1487,7 +1260,14 @@ char* rpl_str(int n)
   assert(0 != replyTable[n].value);
 
   p = &replyTable[n];
-  prepbuf(numbuff, p->value, p->format);
+  strcpy(numbuff, ":%s 000 %s ");
+  if (p->str) {
+    numbuff[4] = p->str[0];
+    numbuff[5] = p->str[1];
+    numbuff[6] = p->str[2];
+    strcpy(numbuff + 11, p->format);
+  }
 
   return numbuff;
 }
+

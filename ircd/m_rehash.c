@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_rehash.c,v 1.5 2005/01/24 01:19:23 bugs Exp $
+ * $Id: m_rehash.c,v 1.1.1.1 2005/10/01 17:28:08 progs Exp $
  */
 
 /*
@@ -79,7 +79,7 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "ircd.h"
@@ -90,11 +90,8 @@
 #include "numeric.h"
 #include "s_conf.h"
 #include "send.h"
-#ifdef USE_SSL
-#include "ssl.h"
-#endif
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 
 /*
  * mo_rehash - oper message handler
@@ -107,7 +104,7 @@ int mo_rehash(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 {
   int flag = 0;
 
-  if (!CanRehash(sptr) || !HasPriv(sptr, PRIV_REHASH))
+  if (!HasPriv(sptr, PRIV_REHASH))
     return send_reply(sptr, ERR_NOPRIVILEGES);
 
   if (parc > 1) { /* special processing */
@@ -119,21 +116,16 @@ int mo_rehash(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
       send_reply(sptr, SND_EXPLICIT | RPL_REHASHING, ":Reopening log files");
       log_reopen(); /* reopen log files */
       return 0;
-#ifdef USE_SSL
-    } else if (*parv[1] == 's') {
-      send_reply(sptr, SND_EXPLICIT | RPL_REHASHING, ":Reopening SSL pem file");
-      ssl_init();
-      return 0;
-#endif
     } else if (*parv[1] == 'q')
       flag = 2;
   }
 
   send_reply(sptr, RPL_REHASHING, configfile);
-  sendto_opmask_butone(0, SNO_OLDSNO, "%C a rechargé le fichier de configuration du serveur",
+  sendto_opmask_butone(0, SNO_OLDSNO, "%C is rehashing Server config file",
 		       sptr);
 
   log_write(LS_SYSTEM, L_INFO, 0, "REHASH From %#C", sptr);
 
   return rehash(cptr, flag);
 }
+

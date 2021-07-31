@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_away.c,v 1.2 2005/01/24 01:52:33 bugs Exp $
+ * $Id: m_away.c,v 1.1.1.1 2005/10/01 17:27:49 progs Exp $
  */
 
 /*
@@ -79,11 +79,12 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "ircd.h"
 #include "ircd_alloc.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "msg.h"
@@ -92,7 +93,7 @@
 #include "s_user.h"
 #include "send.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <string.h>
 
 /*
@@ -129,9 +130,8 @@ static int user_set_away(struct User* user, char* message)
       len = AWAYLEN;
     }
     if (away)
-      away = (char*) MyRealloc(away, len + 1);
-    else
-      away = (char*) MyMalloc(len + 1);
+      MyFree(away);
+    away = (char*) MyMalloc(len + 1);
     assert(0 != away);
 
     user->away = away;
@@ -142,7 +142,7 @@ static int user_set_away(struct User* user, char* message)
 
 
 /*
- * m_away - generic message handler template
+ * m_away - generic message handler
  * - Added 14 Dec 1988 by jto.
  *
  * parv[0] = sender prefix
@@ -159,20 +159,21 @@ int m_away(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   assert(0 != cptr);
   assert(cptr == sptr);
 
-  if (user_set_away(cli_user(sptr), away_message)) {
-    if (!was_away)
-    	sendcmdto_serv_butone(sptr, CMD_AWAY, cptr, ":%s", away_message);
-    send_reply(sptr, RPL_NOWAWAY, IsMale(sptr) ? "" : IsFemale(sptr) ? "e" : "(e)");
+  if (user_set_away(cli_user(sptr), away_message))
+  {
+    if (!was_away)    
+      sendcmdto_serv_butone(sptr, CMD_AWAY, cptr, ":%s", away_message);
+    send_reply(sptr, RPL_NOWAWAY);
   }
   else {
     sendcmdto_serv_butone(sptr, CMD_AWAY, cptr, "");
-    send_reply(sptr, RPL_UNAWAY, IsMale(sptr) ? "" : IsFemale(sptr) ? "e" : "(e)");
+    send_reply(sptr, RPL_UNAWAY);
   }
   return 0;
 }
 
 /*
- * ms_away - server message handler template
+ * ms_away - server message handler
  * - Added 14 Dec 1988 by jto.
  *
  * parv[0] = sender prefix

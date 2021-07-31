@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_invite.c,v 1.6 2005/01/24 01:52:33 bugs Exp $
+ * $Id: m_invite.c,v 1.2 2005/10/08 17:06:47 kouak Exp $
  */
 
 /*
@@ -79,12 +79,14 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "channel.h"
 #include "client.h"
 #include "hash.h"
 #include "ircd.h"
+#include "ircd_features.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "list.h"
@@ -93,9 +95,9 @@
 #include "numnicks.h"
 #include "s_user.h"
 #include "send.h"
-#include "ircd_struct.h"
+#include "struct.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 
 /*
  * m_invite - generic message handler
@@ -140,26 +142,10 @@ int m_invite(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   if (is_silenced(sptr, acptr))
     return 0;
 
-  clean_channelname(parv[2]);
-
-  if (!IsChannelPrefix(*parv[2]))
-    return 0;
-
-  if (!(chptr = FindChannel(parv[2]))) {
-
-    /* Do not disallow to invite to non-existant #channels, otherwise they
-       would simply first be created, causing only MORE bandwidth usage. */
-
-    if (check_target_limit(sptr, acptr, cli_name(acptr), 0))
-      return 0;
-
-    send_reply(sptr, RPL_INVITING, cli_name(acptr), parv[2]);
-
-    if (cli_user(acptr)->away)
-      send_reply(sptr, RPL_AWAY, cli_name(acptr), cli_user(acptr)->away);
-
-    sendcmdto_one(sptr, CMD_INVITE, acptr, "%s :%s", cli_name(acptr), parv[2]);
-
+  if (!IsChannelName(parv[2])
+      || !strIsIrcCh(parv[2])
+      || !(chptr = FindChannel(parv[2]))) {
+    send_reply(sptr, ERR_NOSUCHCHANNEL, parv[2]);
     return 0;
   }
 
@@ -172,11 +158,10 @@ int m_invite(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
     send_reply(sptr, ERR_USERONCHANNEL, cli_name(acptr), chptr->chname);
     return 0;
   }
-  
-  /* rajout du /invite pour les % */
-  if (!(is_halfop(sptr, chptr) || is_chan_op(sptr, chptr)) ) {
+
+  if (!is_chan_op(sptr, chptr)) {
     send_reply(sptr, ERR_CHANOPRIVSNEEDED, chptr->chname);
-   return 0; 
+    return 0;
   }
 
   /* If we get here, it was a VALID and meaningful INVITE */
@@ -186,18 +171,25 @@ int m_invite(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 
   send_reply(sptr, RPL_INVITING, cli_name(acptr), chptr->chname);
 
-  sendcmdto_channel_butone(sptr, CMD_WALLCHOPS, chptr, NULL,
-			       SKIP_DEAF | SKIP_BURST | SKIP_NONOPS,
-				"%H :Invitation de %s dans le salon %H ...", chptr, cli_name(acptr), chptr);
-
   if (cli_user(acptr)->away)
     send_reply(sptr, RPL_AWAY, cli_name(acptr), cli_user(acptr)->away);
 
-  if(MyConnect(acptr))
+  if (MyConnect(acptr)) {
     add_invite(acptr, chptr);
+    sendcmdto_one(sptr, CMD_INVITE, acptr, "%s %H", cli_name(acptr), chptr);
+  } else if (!IsLocalChannel(chptr->chname)) {
+    sendcmdto_one(sptr, CMD_INVITE, acptr, "%s %H %Tu", cli_name(acptr), chptr,
+                  chptr->creationtime);
+  }
 
-  if (MyConnect(acptr))
-    sendcmdto_one(sptr, CMD_INVITE, acptr, "%s :%H", cli_name(acptr), chptr);
+  if (!IsLocalChannel(chptr->chname) || MyConnect(acptr)) {
+    if (feature_bool(FEAT_ANNOUNCE_INVITES)) {
+      /* Announce to channel operators. */
+      sendcmdto_channel_butone(sptr, CMD_WALLCHOPS, chptr, NULL,
+			       SKIP_DEAF | SKIP_BURST | SKIP_NONOPS,
+				"%H :Inviting %s in channel %H ...", chptr, cli_name(acptr), chptr);
+    }
+  }
 
   return 0;
 }
@@ -208,6 +200,7 @@ int m_invite(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
  *   parv[0] - sender prefix
  *   parv[1] - user to invite
  *   parv[2] - channel name
+ *   parv[3] - (optional) channel timestamp
  *
  * - INVITE now is accepted only if who does it is chanop (this of course
  *   implies that channel must exist and he must be on it).
@@ -217,16 +210,20 @@ int m_invite(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
  *
  * - Invite with no parameters now lists the channels you are invited to.
  *                                                         - Isomer 23 Oct 99
+ *
+ * - Invite with too-late timestamp, or with no timestamp from a bursting
+ *   server, is silently discarded.                   - Entrope 19 Jan 05
  */
 int ms_invite(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 {
   struct Client *acptr;
   struct Channel *chptr;
-
+  time_t invite_ts;
+  
   if (IsServer(sptr)) {
     /*
      * this will blow up if we get an invite from a server
-     * we look for channel membership in sptr below.
+     * we look for channel membership in sptr below. 
      */
     return protocol_violation(sptr,"Server attempting to invite");
   }
@@ -237,7 +234,7 @@ int ms_invite(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
     protocol_violation(sptr,"Too few arguments to invite");
     return need_more_params(sptr,"INVITE");
   }
-  if ('#' != *parv[2]) {
+  if (!IsGlobalChannel(parv[2])) {
     /*
      * should not be sent
      */
@@ -247,37 +244,43 @@ int ms_invite(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
     send_reply(sptr, ERR_NOSUCHNICK, parv[1]);
     return 0;
   }
-  if (!MyUser(acptr)) {
-    /*
-     * just relay the message
-     */
-    sendcmdto_one(sptr, CMD_INVITE, acptr, "%s :%s", cli_name(acptr), parv[2]);
-    return 0;
-  }
-
-  if (is_silenced(sptr, acptr))
-    return 0;
 
   if (!(chptr = FindChannel(parv[2]))) {
     /*
-     * allow invites to non existant channels, bleah
+     * allow invites to non existent channels, bleah
      * avoid JOIN, INVITE, PART abuse
      */
     sendcmdto_one(sptr, CMD_INVITE, acptr, "%C :%s", acptr, parv[2]);
     return 0;
   }
 
-  if (!find_channel_member(sptr, chptr)) {
+  if (parc > 3) {
+    invite_ts = atoi(parv[3]);
+    if (invite_ts > chptr->creationtime)
+      return 0;
+  } else if (IsBurstOrBurstAck(cptr))
+    return 0;
+
+  if (!IsChannelService(sptr) && !find_channel_member(sptr, chptr)) {
     send_reply(sptr, ERR_NOTONCHANNEL, chptr->chname);
     return 0;
   }
+
   if (find_channel_member(acptr, chptr)) {
     send_reply(sptr, ERR_USERONCHANNEL, cli_name(acptr), chptr->chname);
     return 0;
   }
-  add_invite(acptr, chptr);
-  sendcmdto_one(sptr, CMD_INVITE, acptr, "%s :%H", cli_name(acptr), chptr);
+
+  if (is_silenced(sptr, acptr))
+    return 0;
+
+  if (MyConnect(acptr)) {
+    add_invite(acptr, chptr);
+    sendcmdto_one(sptr, CMD_INVITE, acptr, "%s %H", cli_name(acptr), chptr);
+  } else {
+    sendcmdto_one(sptr, CMD_INVITE, acptr, "%s %H %Tu", cli_name(acptr), chptr,
+                  chptr->creationtime);
+  }
+
   return 0;
 }
-
-

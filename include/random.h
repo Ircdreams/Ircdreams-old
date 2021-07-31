@@ -1,7 +1,6 @@
-/*
- * random.h
- *
- * $Id: random.h,v 1.1.1.1 2004/02/28 11:11:07 bugs Exp $
+/** @file random.h
+ * @brief 32-bit pseudo-random number generator interface.
+ * @version $Id: random.h,v 1.1.1.1 2005/10/01 17:26:59 progs Exp $
  */
 #ifndef INCLUDED_random_h
 #define INCLUDED_random_h

@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_error.c,v 1.3 2005/01/24 01:52:33 bugs Exp $
+ * $Id: m_error.c,v 1.1.1.1 2005/10/01 17:27:54 progs Exp $
  */
 
 /*
@@ -79,12 +79,13 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "hash.h"
 #include "ircd.h"
 #include "ircd_alloc.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "numeric.h"
@@ -93,7 +94,7 @@
 #include "s_misc.h"
 #include "send.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <string.h>
 
 /*
@@ -114,9 +115,9 @@ int mr_error(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   Debug((DEBUG_ERROR, "Received ERROR message from %s: %s", cli_name(sptr), para));
 
   if (cptr == sptr)
-    sendto_opmask_butone(0, SNO_OLDSNO, "ERREUR :depuis %C -- %s", cptr, para);
+    sendto_opmask_butone(0, SNO_OLDSNO, "ERROR :from %C -- %s", cptr, para);
   else
-    sendto_opmask_butone(0, SNO_OLDSNO, "ERREUR :depuis %C via %C -- %s", sptr,
+    sendto_opmask_butone(0, SNO_OLDSNO, "ERROR :from %C via %C -- %s", sptr,
 			 cptr, para);
 
   if (cli_serv(sptr))
@@ -143,9 +144,9 @@ int ms_error(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   Debug((DEBUG_ERROR, "Received ERROR message from %s: %s", cli_name(sptr), para));
 
   if (cptr == sptr)
-    sendto_opmask_butone(0, SNO_OLDSNO, "ERREUR :depuis %C -- %s", cptr, para);
+    sendto_opmask_butone(0, SNO_OLDSNO, "ERROR :from %C -- %s", cptr, para);
   else
-    sendto_opmask_butone(0, SNO_OLDSNO, "ERREUR :depuis %C via %C -- %s", sptr,
+    sendto_opmask_butone(0, SNO_OLDSNO, "ERROR :from %C via %C -- %s", sptr,
 			 cptr, para);
 
   if (cli_serv(sptr))

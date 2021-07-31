@@ -1,7 +1,7 @@
 Many of the old compile-time options are now configured through the
 server configuration file, ircd.conf.  This file is intended to
 document each of these features.  Logging, although also configured
-through the use of F-lines, is documented in doc/readme.log.  NOTE
+through the use of Feature entries, is documented in doc/readme.log.  NOTE
 THAT THESE NAMES ARE CASE SENSITIVE!  Values are not case sensitive
 unless stated otherwise in the documentation for that feature.
 
@@ -63,7 +63,7 @@ sendQ, but at peak moments this can easily increase to 2032 bytes per
 client (sendQs are allocated in chunks of 2032 bytes).  The maximum
 possible amount that can be allocated for sendQs is the number of
 connected clients times whatever you specified as the maximum sendQ in
-your Y: lines in the ircd.conf file.  That value will likely be larger
+your Class blocks in the ircd.conf file.  That value will likely be larger
 then the amount of RAM you have.  The educated guess I talked about
 earlier would be "number of clients" times * 2048 bytes + "size of
 net.burst" * n, where "n" is 1 for leafs and up to 5 for HUBs.  The
@@ -103,16 +103,16 @@ SERVER_PORT
 When an IRC operator attempts a connect to another server, he or she
 may not know which port the connect should go to.  In this server
 version, that operator may use the special port 0, in which case the
-server will take the port from the C-line.  If no port is specified in
-the C-line, however, the port specified by this option will be used
-instead.
+server will take the port from the Connect block.  If no port is
+specified in the Connect block, however, the port specified by this
+option will be used instead.
 
 NODEFAULTMOTD
  * Type: boolean
  * Default: TRUE
 
 Every time a client connects to your server, the full Message of the
-Day (as specified by the T-lines or by the file specified by the MPATH
+Day (as specified by the Motd blocks or by the file specified by the MPATH
 option) is sent to the client.  The server sends the Message of the
 Day even though many clients permit the user to ignore it.  Many users
 never read the message of the day anyway, making it a huge waste of
@@ -183,13 +183,12 @@ NODNS
 
 If you are playing with the server off-line, and no DNS is available,
 then long delays occur before the server starts up because it tries to
-resolve the name given on the M-line (which usually isn't given in
-/etc/hosts) and for each connecting client.  If you specify "TRUE"
-here, then a call to gethostbyname() will be done only for the real
-hostname, and the server will not try to resolve clients that connect
-to "localhost."  Note that other calls to gethostbyname() are still
-done if you use VIRTUAL_HOST; also note that the server still tries to
-resolve clients that connect to the real IP address of the server.
+resolve the name given in the General block (which usually isn't given
+in /etc/hosts) and for each connecting client.  If you specify "TRUE"
+here, then a DNS lookup will be done only for the real hostname, and
+the server will not try to resolve clients that connect to
+"localhost."  Note that other DNS lookups are still done for outbound
+connections.
 
 RANDOM_SEED
  * Type: string
@@ -250,12 +249,6 @@ HIDDEN_IP
 
 This selects a fake IP to be shown on /USERIP and /WHO %i when the
 target has a hidden host (see HOST_HIDING).
-
-AUTOHIDE
- * Type: boolean
- * Default: TRUE
-
-If enabled, local users get umode +x by default when they connect.
 
 CONNEXIT_NOTICES
  * Type: boolean
@@ -345,14 +338,6 @@ change this value, but if you do, consider the fact that users whose
 clients do not support NOSPOOF will have to type /QUOTE PING <big
 number> before registration.
 
-TIMESEC
- * Type: integer
- * Default: 60
-
-This is the maximum idle time for the server. If no messages are
-received in TIMESEC seconds, PINGFREQUENCY and CONNECTFREQUENCY are
-checked.  Recommended value is 60 seconds.
-
 MAXIMUM_LINKS
  * Type: integer
  * Default: 1
@@ -368,9 +353,9 @@ If the daemon doesn't receive anything from any of its links within
 PINGFREQUENCY seconds, then the it will attempt to check for an active
 link with a PING message.  If no reply is received within
 (PINGFREQUENCY * 2) seconds, then the connection will be closed.  This
-value may be overridden by a Y-line in "ircd.conf" if the connection's
-I- or C-line in "ircd.conf" assigns a specific class to the connection
-(recommended).
+value may be overridden by a Class block in "ircd.conf" if the
+connection's Client or Connect block in "ircd.conf" assigns a specific
+class to the connection (recommended).
 
 CONNECTFREQUENCY
  * Type: integer
@@ -378,18 +363,16 @@ CONNECTFREQUENCY
 
 This is the default frequency that the server attempts to reconnect
 with its uplink server if it is set to auto connect to it. Note that
-this value is overridden by a Y-line in ircd.conf if the C-lines in
-ircd.conf assign a specific class to the connection (recommended).
+this value is overridden by a Class block in ircd.conf if the Connect
+entries in ircd.conf assign a specific class to the connection.
 
 DEFAULTMAXSENDQLENGTH
  * Type: integer
  * Default: 40000
 
-This is the default value of the maximum sendQ length of Y-line
-classes (see doc/example.conf for details on Y-lines).  You will
-probably always override this value in your "ircd.conf" with the
-Y-lines.  The given value used to be an often used value for client
-sendQs.
+This is the default value of the maximum sendQ length of connection
+classes (see doc/example.conf for details on Class blocks).  You will
+generally override this value in your "ircd.conf" with a Class block.
 
 GLINEMAXUSERCOUNT
  * Type: integer
@@ -407,6 +390,16 @@ MPATH is the filename (relative to DPATH) or the full path of the
 "Message of the Day" file.  The contents of this file will be sent to
 every client that connects to the server, after registration.
 
+RPATH
+ * Type: string
+ * Default: "remote.motd"
+
+RPATH is the filename (relative to DPATH) or the full path of the
+"Remote Message of the Day" file.  The contents of this file will be
+sent to every remote client that issues a /MOTD <your server name>.
+Only the first three lines are sent, so you might want to keep that in
+mind while writing the file.
+
 PPATH
  * Type: string
  * Default: "ircd.pid"
@@ -414,18 +407,6 @@ PPATH
 PPATH is the filename (relative to DPATH) or the full path of the
 "PID" file.  It is used for storing the server's process ID so that a
 ps(1) isn't necessary.
-
-VIRTUAL_HOST
- * Type: boolean
- * Default: FALSE
-
-This option is only needed when you wish to run multiple IRC servers
-on the same machine, and they must share at least one port.  This will
-require having multiple IP addresses for the machine that will be
-hosting the servers.  If you specify "TRUE" here, you can cause the
-server to bind to one of these IP addresses.  Use the second field of
-the M-line (the "password" field) to specify the IP address.  If you
-are unsure, stick with "FALSE."
 
 TOS_SERVER
  * Type: integer
@@ -452,261 +433,16 @@ from the kernel at once.  Since the number retrieved can impact
 performance, it can be tuned by modifying this value.  The engines
 enforce a lower limit of 20.
 
-CRYPT_OPER_PASSWORD
- * Type: boolean
- * Default: TRUE
-
-In order to allow certain users to become IRC operators, they must
-authenticate themselves with a password.  This password is matched
-against an O-line in the "ircd.conf" configuration file; see
-doc/example.conf for more details.  If you specify "TRUE" here, you
-must use the crypted form of these passwords in your "ircd.conf" file.
-Since compromises of the "ircd.conf" file have happened in the past,
-you are highly encouraged to use this option.  You can find a program
-called "mkpasswd" in the tools directory that will allow you to
-generate crypted passwords.
-
-OPER_NO_CHAN_LIMIT
- * Type: boolean
- * Default: TRUE
-
-If this option is set to "TRUE," IRC operators may join as many
-channels as they need to..
-
-SHOW_INVISIBLE_USERS
- * Type: boolean
- * Default: TRUE
-
-If you specify "TRUE" here, then your (local) IRC Operators will be
-able to see all local invisible users (clients connected to your own
-server).  This should be used only for investigating instances of
-abuse; make sure your operators do not use this for spying on
-individuals.
-
-SHOW_ALL_INVISIBLE_USERS
- * Type: boolean
- * Default: TRUE
-
-If you specify "TRUE" here, then your global IRC Operators will be
-able to see ALL invisible users.  This should be used only for
-investigating instances of abuse; make sure your operators do not use
-this for spying on individuals.
-
-UNLIMIT_OPER_QUERY
- * Type: boolean
- * Default: FALSE
-
-A /WHO command can sometimes return several hundred lines of
-information.  To reduce the flood potential, the output is truncated.
-By setting this option to "TRUE," when an IRC Operator uses /WHO, the
-output will not be truncated, no matter how much data is returned.
-
-LOCAL_KILL_ONLY
- * Type: boolean
- * Default: FALSE
-
-If this option is set to "TRUE," operators of this server may only
-KILL clients directly connected to this server.  Operators will not be
-able to issue KILLs for clients on other servers.  Some networks may
-require that this be turned on for newly linking servers.
-
 CONFIG_OPERCMDS
  * Type: boolean
  * Default: FALSE
 
-For u2.10.11, several new oper-only features have been added that
-involve changes to the server<->server protocol.  Until the entire
-network is running the new version, these features cannot be enabled.
-This configuration option provides a single switch to prevent the use
-of these features until the entire network has been upgraded.  It is
-not required that all servers set this to "TRUE" in order for the
-features to be used.
-
-OPER_KILL
- * Type: boolean
- * Default: TRUE
-
-This selects whether global IRC operators on this server are permitted
-to issue the /KILL command.
-
-OPER_REHASH
- * Type: boolean
- * Default: TRUE
-
-This selects whether global IRC operators on this server are permitted
-to issue the /REHASH command.
-
-OPER_RESTART
- * Type: boolean
- * Default: TRUE
-
-This selects whether global IRC operators on this server are permitted
-to issue the /RESTART command.
-
-OPER_DIE
- * Type: boolean
- * Default: TRUE
-
-This selects whether global IRC operators on this server are permitted
-to issue the /DIE command.
-
-OPER_GLINE
- * Type: boolean
- * Default: TRUE
-
-This selects whether global IRC operators on this server are permitted
-to issue global G-lines.
-
-OPER_LGLINE
- * Type: boolean
- * Default: TRUE
-
-This selects whether global IRC operators on this server are permitted
-to issue local G-lines.
-
-OPER_JUPE
- * Type: boolean
- * Default: TRUE
-
-This selects whether global IRC operators on this server are permitted
-to issue global jupes.
-
-OPER_LJUPE
- * Type: boolean
- * Default: TRUE
-
-This selects whether global IRC operators on this server are permitted
-to issue local jupes.
-
-OPER_OPMODE
- * Type: boolean
- * Default: TRUE
-
-This selects whether global IRC operators on this server are permitted
-to use /OPMODE and /CLEARMODE on ordinary ("#") channels.
-
-OPER_FORCE_OPMODE
- * Type: boolean
- * Default: TRUE
-
-This selects whether global IRC operators on this server are permitted
-to override Q-lines set for /OPMODE and /CLEARMODE on ordinary ("#") channels
-
-OPER_BADCHAN
- * Type: boolean
- * Default: FALSE
-
-This selects whether global IRC operators on this server are permitted
-to issue global BADCHANs.  USE OF THIS ON THE UNDERNET IS STRICTLY
-REGULATED BY THE UNDERNET ADMINISTRATION.
-
-OPER_LBADCHAN
- * Type: boolean
- * Default: FALSE
-
-This selects whether global IRC operators on this server are permitted
-to issue local BADCHANs.  USE OF THIS ON THE UNDERNET IS STRICTLY
-REGULATED BY THE UNDERNET ADMINISTRATION.
-
-OPER_SET
- * Type: boolean
- * Default: FALSE
-
-This selects whether global IRC operators on this server are permitted
-to use the /SET command to set various feature values.
-
-OPERS_SEE_IN_SECRET_CHANNELS
- * Type: boolean
- * Default: TRUE
-
-If you specify "TRUE" here, then your global IRC Operators will be
-able to see who is on a specified secret channel, without joining
-themselves.  This can be used to make a reasonable judgment in the
-case of a "channel takeover" being reported, while the channel is set
-invite-only.  See doc/readme.who for more details.
-
-OPER_WIDE_GLINE
- * Type: boolean
- * Default: TRUE
-
-This selects whether global IRC operators on this server are permitted
-to use the /GLINE command with the ! flag to force slightly wide
-G-lines to be set.
-
-LOCOP_KILL
- * Type: boolean
- * Default: TRUE
-
-This selects whether local IRC operators are permitted to use the
-/KILL command on local clients.
-
-LOCOP_REHASH
- * Type: boolean
- * Default: TRUE
-
-This selects whether local IRC operators are permitted to use the
-/REHASH command.
-
-LOCOP_RESTART
- * Type: boolean
- * Default: FALSE
-
-This selects whether local IRC operators are permitted to use the
-/RESTART command.
-
-LOCOP_DIE
- * Type: boolean
- * Default: FALSE
-
-This selects whether local IRC operators are permitted to use the /DIE
-command.
-
-LOCOP_LGLINE
- * Type: boolean
- * Default: TRUE
-
-This selects whether local IRC operators are permitted to issue local
-G-lines.
-
-LOCOP_LJUPE
- * Type: boolean
- * Default: TRUE
-
-This selects whether local IRC operators are permitted to issue local
-jupes.
-
-LOCOP_LBADCHAN
- * Type: boolean
- * Default: FALSE
-
-This selects whether local IRC operators are permitted to issue local
-BADCHANs.  USE OF THIS ON THE UNDERNET IS STRICTLY REGULATED BY THE
-UNDERNET ADMINISTRATION.
-
-LOCOP_SET
- * Type: boolean
- * Default: FALSE
-
-This selects whether local IRC operators are permitted to use the /SET
-command to set various feature values.
-
-LOCOP_SEE_IN_SECRET_CHANNELS
- * Type: boolean
- * Default: FALSE
-
-If you specify "TRUE" here, then your local IRC Operators will be
-able to see who is on a specified secret channel, without joining
-themselves.  This can be used to make a reasonable judgment in the
-case of a "channel takeover" being reported, while the channel is set
-invite-only.  See doc/readme.who for more details.
-
-LOCOP_WIDE_GLINE
- * Type: boolean
- * Default: FALSE
-
-This selects whether local IRC operators are permitted to use the
-/GLINE command with the ! flag to force slightly wide G-lines to be
-set.
+Since u2.10.11, several new oper-only features have been added that
+involve changes to the server<->server protocol.  This configuration
+option provides a single switch to prevent the use of these features
+until the entire network has been upgraded.  It is not required that
+all servers set this to "TRUE" in order for the features to be used,
+as long as all servers are running u2.10.11 or above.
 
 HIS_MAP
  * Type: boolean
@@ -719,18 +455,12 @@ HIS_SNOTICES
  * Default: TRUE
 
 As per UnderNet CFV-165, this removes server notices from users.
- 
+
 HIS_SNOTICES_OPER_ONLY
  * Type: boolean
  * Default: TRUE
 
 As per UnderNet CFV-165, this removes server notices from users.
- 
-HIS_DESYNCS
- * Type: boolean
- * Default: TRUE
-
-As per UnderNet CFV-165, this removes server wallops from users.
 
 HIS_DEBUG_OPER_ONLY
  * Type: boolean
@@ -756,11 +486,23 @@ HIS_TRACE
 
 As per UnderNet CFV-165, this removes /TRACE from users.
 
+HIS_STATS_a
+ * Type: boolean
+ * Default: TRUE
+
+As per UnderNet CFV-165, this removes /STATS a from users.
+
 HIS_STATS_l
  * Type: boolean
  * Default: TRUE
 
 As per UnderNet CFV-165, this removes /STATS l from users.
+
+HIS_STATS_L
+ * Type: boolean
+ * Default: TRUE
+
+As per UnderNet CFV-165, this removes /STATS L from users.
 
 HIS_STATS_c
  * Type: boolean
@@ -773,12 +515,6 @@ HIS_STATS_g
  * Default: TRUE
 
 As per UnderNet CFV-165, this removes /STATS g from users.
-
-HIS_STATS_h
- * Type: boolean
- * Default: TRUE
-
-As per UnderNet CFV-165, this removes /STATS h from users.
 
 HIS_STATS_k
  * Type: boolean
@@ -803,6 +539,12 @@ HIS_STATS_j
  * Default: TRUE
 
 As per UnderNet CFV-165, this removes /STATS j from users.
+
+HIS_STATS_J
+ * Type: boolean
+ * Default: TRUE
+
+As per UnderNet CFV-165, this removes /STATS J from users.
 
 HIS_STATS_M
  * Type: boolean
@@ -831,7 +573,7 @@ As per UnderNet CFV-165, this removes /STATS p from users.
 HIS_STATS_q
  * Type: boolean
  * Default: TRUE
- 
+
 As per UnderNet CFV-165, this removes /STATS q from users.
 
 HIS_STATS_r
@@ -839,6 +581,12 @@ HIS_STATS_r
  * Default: TRUE
 
 As per UnderNet CFV-165, this removes /STATS r from users.
+
+HIS_STATS_R
+ * Type: boolean
+ * Default: TRUE
+
+As per UnderNet CFV-165, this removes /STATS R from users.
 
 HIS_STATS_d
  * Type: boolean
@@ -928,7 +676,15 @@ HIS_WHO_HOPCOUNT
  * Type: boolean
  * Default: TRUE
 
-As per UnderNet CFV-165, this replaces hopcount to a static 3 in replies to /WHO.
+As per UnderNet CFV-165, this replaces hopcount to a static 3 in
+replies to /WHO.
+
+HIS_MODEWHO	
+ * Type: boolean	
+ * Default: TRUE	
+
+As per UnderNet CFV-165, this doesn't show which server performed a channel	
+mode change.
 
 HIS_BANWHO
  * Type: boolean
@@ -962,6 +718,12 @@ HIS_NETSPLIT
 
 As per UnderNet CFV-165, this removes server names in net break sign-offs.
 
+HIS_WHOIS_LOCALCHAN
+ * Type: boolean
+ * Default: TRUE
+
+As per UnderNet CFV-165, this removes local channels in replies to /WHOIS.
+
 HIS_SERVERNAME
  * Type: string
  * Default: "*.undernet.org"
@@ -976,11 +738,11 @@ HIS_SERVERINFO
 As per UnderNet CFV-165, this is the "info" of the server shown to users on a
 /WHOIS of another user.
 
-HIS_URLSERVERS        
- * Type: string 
+HIS_URLSERVERS
+ * Type: string
  * Default: "http://www.undernet.org/servers.php"
- 
-As per UnderNet CFV-165, this is the URL shown to users when they do a /MAP or 
+
+As per UnderNet CFV-165, this is the URL shown to users when they do a /MAP or
 /LINKS.
 
 NETWORK
@@ -996,63 +758,178 @@ URL_CLIENTS
 
 This defines a URL that users may visit to find compatible IRC clients.
 
-## CODERZ FEATURES:
+NICKLEN
+ * Type: integer
+ * Default: 9
 
-KLINE_MAIL
- * Type: string
- * Default: "Klines@Jeux.Fr"
+This is the allowed length of the nickname length.  It may not be
+larger than the NICKLEN #define, and should usually be the same
+length.  The real purpose of this feature is to permit easy increases
+in nickname length for a network.
 
-Défini le mail qui sera indiqués aux users recevant une gline pour s'y adresser.
+IRCD_RES_RETRIES
+ * Type: integer
+ * Default: 2
 
-TOPIC_BURST
- * Type: boolean
- * Default: TRUE
+This is the number of attempts the irc daemon's resolver will have at
+trying to solicit a response from the DNS server.
 
-Si actif, merge le topic des salons en commun (topic du plus vieu chan gardé)
+IRCD_RES_TIMEOUT
+ * Type: integer
+ * Default: 4
 
-HIS_SERVERMODE
- * Type: boolean
- * Default: TRUE
+When a DNS query is sent, the irc daemon's resolver will wait this many
+seconds for a reply.  After this timeout has expired, it will retry again,
+for as many retries as IRCD_RES_RETRIES allows.  This can be cut short by
+AUTH_TIMEOUT expiring.
+NOTE: Has no effect when using the adns resolver.
 
-Si actif, lorsqu'un serveur envoi un MODE ou un KICK, le message MODE ou KICK envoyé aux
-users contient le nom du serveur où ils sont connecté à la place de celui qui l'a envoyé.
+AUTH_TIMEOUT
+ * Type: integer
+ * Default: 9
 
-OPCLEARMODE
+This is the maximum number of seconds to wait for the ident lookup and
+the DNS query to succeed.  On older (pre 2.10.11.06) servers this was
+hard coded to 60 seconds.
+
+IPCHECK_CLONE_LIMIT
+ * Type: integer
+ * Default: 4
+
+The number of times you are allowed to connect within IPCHECK_CLONE_PERIOD
+seconds before you are considered abusing the server and throttled.
+
+IPCHECK_CLONE_PERIOD
+ * Type: integer
+ * Default: 40
+
+The number of seconds you are allowed to connect IPCHECK_CLONE_LIMIT times
+within before you are considered abusing the server and throttled.
+For instance if you set IPCHECK_CLONE_LIMIT to 1, and IPCHECK_CLONE_PERIOD
+to 10, then a user is only allowed to connect once in 10s, if they connect
+again within 10s, then they are considered to be connecting too fast and
+they are throttled.
+
+IPCHECK_CLONE_DELAY
+ * Type: integer
+ * Default: 600
+
+The number of seconds grace after restarting the server before the throttle
+code kicks in.  Even if a user connects repetitively during this period,
+they will never get throttled.  This is so after a restart users on a
+multiuser box can all connect to a server simultaniously without being
+considered an attack.
+
+SOCKSENDBUF
+ * Type: integer
+ * Default: 61440
+
+The send window size used for connections to other servers.
+
+SOCKRECVBUF
+ * Type: integer
+ * Default: 61440
+
+The receive window size used for connections to other servers.
+
+ANNOUNCE_INVITES
  * Type: boolean
  * Default: FALSE
 
-Active/Desactive les commandes OPMODE (mettre n'importe quel mode n'importe quand sur n'importe quel
-salon (sauf salon de Q lines) pour les ircops) et  CLEARMODE (supprimer tous les modes d'un salon pour
-y accéder)
+If set, send RPL_ISSUEDINVITE (345) to a channel's operators to
+announce when someone is invited to the channel.
+
+LOCAL_CHANNELS
+ * Type: boolean
+ * Default: TRUE
+
+If set, allow users to create local channels.
+
+TOPIC_BURST
+ * Type: boolean
+ * Default: FALSE
+
+If set, send the current topic value and timestamp for channels during
+burst.  This generally only makes sense for hubs to use, and it causes
+a large increase in net.burst size.
+
+CHANNELLEN
+ * Type: integer
+ * Default: 200
+
+This is the allowed length of locally created channels.  It may not be
+larger than the CHANNELLEN #define.  Like the NICKLEN feature, this is
+intended to ease changes in channel name length across a network.
+
+OPLEVELS	
+ * Type: boolean	
+ * Default: TRUE	
+	
+This allows local users to set the +A and +U modes (admin and user	
+passwords, respectively) on channels where they are marked as channel	
+managers.  This feature must be disabled until all servers on the	
+network are able to interpret and handle these modes correctly.	
+	
+ZANNELS	
+ * Type: boolean	
+ * Default: TRUE	
+	
+This preserves empty channels with no admin password so that it is	
+impractical to become the channel manager by clearing out the channel.	
+It must be set to FALSE if there are both 2.10.11.x servers and	
+2.10.12.y servers on the network where y < 4.  It should be set to	
+TRUE whenever the OPLEVELS features is TRUE.	
+	
+USER_GLIST	
+* Type: boolean	
+* Default: FALSE	
+	
+Optionally removes the ability to list glines by users	
+(ie /GLINE ident@host.mask.cc, shows reason, expiry time etc)
+
+	-- FEATURES IRCODERZ --
+
+EXTENDED_CHECKCMD
+ * Type: boolean
+ * Default: FALSE
+
+Extended informations in /check nick and /check server (sendQ, recvQ etc.).
 
 SETHOST
-  * Type: boolean
-  * Default: TRUE
+ * Type: boolean
+ * Default: FALSE
 
-Active/Desactive l'utilisation des S:lines (spoofed hosts, voir example.conf:[S:Lines]).
-
-SETHOST_AUTO
-  * Type: boolean
-  * Default: FALSE
-
-Si il est actif, lorsqu'un user qui se connect vérifi une Sline user par son host et son ident, l'host
-de cette sline lui sera automatiquement attribuée.
+Activate "Sethost" blocks and /sethost command to have a virtual host.
 
 SETHOST_FREEFORM
-  * Type: boolean
-  * Default: FALSE
+ * Type: boolean
+ * Default: FALSE
 
-Autorise, si actif, les opers à utiliser /sethost pour se mettre n'importe quelle host et ident, même
-si il n'y a pas de Sline la définissant.
+Opers can use /sethost with any vhost who are not in a Sethost block.
 
 SETHOST_USER
-  * Type: boolean
-  * Default: TRUE
+ * Type: boolean
+ * Default: FALSE
 
-Autorise les users à utiliser les slines.
+Allow users to use /sethost
 
-HIS_STATS_s
-  * Type: boolean
-  * Default: TRUE
+SETHOST_UNSET
+ * Type: boolean
+ * Default: FALSE
 
-Empeche les users de voir le /stats s
+Allow users (or IRC Operators if SETHOST_USER is false) to unset their vhost with /mode nick -H
+
+SETHOST_AUTO
+ * Type: boolean
+ * Default: FALSE
+
+An use who is connected with a realhost that is in a sethost block will see his host changed to
+the vhost.
+
+DEFCHMODES
+ * Type: string
+ * Default: nt
+
+If sets, when an user creates a channel, server sets DEFCHMODES on channel.
+/!\ WARNING: Enter a *CORRECT* string, as "nt", "cCnt" or "", but do not
+put '+' or '-' or other chars. It could make a desynch of servers.

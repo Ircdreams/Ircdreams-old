@@ -1,7 +1,6 @@
-/*
- * fileio.h
- *
- * $Id: fileio.h,v 1.1.1.1 2004/02/28 11:10:40 bugs Exp $
+/** @file fileio.h
+ * @brief ANSI FILE* clone API declarations.
+ * @version $Id: fileio.h,v 1.1.1.1 2005/10/01 17:26:50 progs Exp $
  */
 #ifndef INCLUDED_fileio_h
 #define INCLUDED_fileio_h
@@ -13,10 +12,11 @@
 
 struct stat;
 
-/*
- * FileBuf is a mirror of the ANSI FILE struct, but it works for any
+/** A mirror of the ANSI FILE struct, but it works for any
  * file descriptor. FileBufs are allocated when a file is opened with
  * fbopen, and they are freed when the file is closed using fbclose.
+ * (Some OSes limit the range of file descriptors in a FILE*, for
+ * example to fit in "char".)
  */
 typedef struct FileBuf FBFILE;
 
@@ -34,7 +34,7 @@ extern FBFILE *fdbopen(int fd, const char *mode);
  * close a file opened with fbopen, see fclose(3)
  */
 extern void fbclose(FBFILE * fb);
-/* 
+/*
  * return the next character from the file, EOF on end of file
  * see fgetc(3)
  */

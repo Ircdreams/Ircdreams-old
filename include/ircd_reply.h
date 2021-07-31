@@ -16,8 +16,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: ircd_reply.h,v 1.1.1.1 2004/02/28 11:10:50 bugs Exp $
+ */
+/** @file
+ * @brief Interfaces for sending common replies to users.
+ * @version $Id: ircd_reply.h,v 1.1.1.1 2005/10/01 17:26:55 progs Exp $
  */
 #ifndef INCLUDED_ircd_reply_h
 #define INCLUDED_ircd_reply_h
@@ -26,10 +28,9 @@ struct Client;
 
 extern int protocol_violation(struct Client* cptr, const char* pattern, ...);
 extern int need_more_params(struct Client* cptr, const char* cmd);
-extern int send_error_to_client(struct Client* cptr, int error, ...);
 extern int send_reply(struct Client* to, int reply, ...);
 
-#define SND_EXPLICIT	0x40000000	/* first arg is a pattern to use */
+#define SND_EXPLICIT	0x40000000	/**< first arg is a pattern to use */
 
 #endif /* INCLUDED_ircd_reply_h */
 

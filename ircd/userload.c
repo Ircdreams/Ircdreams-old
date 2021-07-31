@@ -1,7 +1,7 @@
 /*
  * Userload module by Michael L. VanLoon (mlv) <michaelv@iastate.edu>
  * Written 2/93.  Originally grafted into irc2.7.2g 4/93.
- * 
+ *
  * Rewritten 9/97 by Carlo Wood (Run) <carlo@runaway.xs4all.nl>
  * because previous version used ridiculous amounts of memory
  * (stored all loads of the passed three days ~ 8 megs).
@@ -22,10 +22,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: userload.c,v 1.3 2005/01/24 01:19:24 bugs Exp $
  */
-#include "../config.h"
+/** @file
+ * @brief Userload tracking and statistics.
+ * @version $Id: userload.c,v 1.1.1.1 2005/10/01 17:28:43 progs Exp $
+ */
+#include "config.h"
 
 #include "userload.h"
 #include "client.h"
@@ -36,28 +38,26 @@
 #include "s_misc.h"
 #include "s_stats.h"
 #include "send.h"
-#include "ircd_struct.h"
+#include "struct.h"
 #include "sys.h"
 
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
 
-struct current_load_st current_load;    /* The current load */
+struct current_load_st current_load;    /**< The current load */
 
-static struct current_load_st cspm_sum; /* Number of connections times number
+static struct current_load_st cspm_sum; /**< Number of connections times number
                                            of seconds per minute. */
-static struct current_load_st csph_sum; /* Number of connections times number
+static struct current_load_st csph_sum; /**< Number of connections times number
                                            of seconds per hour. */
-static struct current_load_st cspm[60]; /* Last 60 minutes */
-static struct current_load_st csph[72]; /* Last 72 hours */
+static struct current_load_st cspm[60]; /**< Last 60 minutes */
+static struct current_load_st csph[72]; /**< Last 72 hours */
 
-static int m_index, h_index;    /* Array indexes */
+static int m_index; /**< Next entry to use in #cspm. */
+static int h_index; /**< Next entry to use in #csph. */
 
-/*
- * update_load
- *
- * A new connection was added or removed.
+/** Update load average to reflect a change in the local client count.
  */
 void update_load(void)
 {
@@ -201,7 +201,13 @@ void update_load(void)
   last = CurrentTime;
 }
 
-void calc_load(struct Client *sptr, struct StatDesc *sd, int stat, char *param)
+/** Statistics callback to display userload.
+ * @param[in] sptr Client requesting statistics.
+ * @param[in] sd Stats descriptor for request (ignored).
+ * @param[in] param Extra parameter from user (ignored).
+ */
+void
+calc_load(struct Client *sptr, const struct StatDesc *sd, char *param)
 {
   /* *INDENT-OFF* */
   static const char *header =
@@ -256,6 +262,7 @@ void calc_load(struct Client *sptr, struct StatDesc *sd, int stat, char *param)
 		  times[2][i], times[3][i], times[4][i], what[i]);
 }
 
+/** Initialize the userload statistics. */
 void initload(void)
 {
   memset(&current_load, 0, sizeof(current_load));

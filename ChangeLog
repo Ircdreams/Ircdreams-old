@@ -1,0 +1,562 @@
+2006-12-28  David Cortier <Cesar@ircube.org>
+
+	* ircd/channel.c (set_ban_mask): add trailing \0 to prevent unwanted behaviour with long bans
+
+2006-09-21  Romain Bignon <progs@headfucking.net>
+
+	* ircd/ircd_relay.c (relay_channel_notice): there was a "return" before calling of sendcmdto_channel_butone !
+
+	* ircd/s_user. (set_umode): if this is a SVSMODE, it can use +H
+
+2006-04-29  David Cortier <Cesar@ircube.org>
+
+        * ircd/m_list.c (param_parse): fix bug causing crash if DEFAULT PARAM LIST is set in conf
+
+2006-04-29  David Cortier <Cesar@ircube.org>
+
+	* ircd/channel.c (find_ban): fix bug making ircd forgetting to check ban against crypthost if +x|H
+
+	* ircd/m_names.c (do_name), (ms_name): optimization, let oper see all members even if not member
+
+2006-03-26  Romain Bignon <progs@headfucking.net>
+
+	* ircd/channel.c: Update an Entrope's patch.
+
+	* ircd/s_conf.c: For Cesar, initialization of vhostList.
+
+	* tools/checkircd: This is a litle script than a crontab have to call to check if an ircd isn't crashed.
+
+2006-03-09  Romain Bignon <progs@headfucking.net>
+
+	* ircd/gline.cp: Fixed a litle bug.
+
+2006-02-24  Romain Bignon <progs@headfucking.net>
+
+	* include/patchlevel.h: Release version ircoderz2.0.
+
+2006-02-16  Romain Bignon <progs@headfucking.net>
+
+	* ircd/m_clearmode.c: We ignore +k and +p users.
+
+	* ircd/gline.c: Fixed a bug who didn't check on nick!user@host but on user@host the number of victimes.
+
+2006-02-06  Romain Bignon <progs@headfucking.net>
+
+	* ircd/m_oper.c (m_oper): Show Operblock's class name in snotice.
+	
+	* ircd/m_who.c: Typo.
+
+	* ircd/m_whowas.c: Fixed a bug for RPL_WHOISACTUALLY reply where there isn't any ip specified.
+	
+	* ircd/channel.c, ircd/s_misc, m_whowas.c: Some ircu changes.
+
+2006-01-04  Romain Bignon <progs@headfucking.net>
+
+	* ircd/s_user.c (set_vhost): If host is in configuration, use of this form
+	(for example: /sethost pipi.caca for SetHost block "PiPi.CaCa" will give the host "PiPi.CaCa")
+
+2005-12-25  Romain Bignon <progs@headfucking.net>
+
+	* ircd/s_err.c, ircd/s_stats.c: Change format of /stats s's string.
+
+	* ircd/client.h: Add SNO_REALOP in default opers +s flags.
+
+	* ircd/m_oper.c: Do not send snotice with log_write(), because there is sendto_allops() to this.
+
+	* doc/example.conf, doc/readme.features: Write a warning about DEFCHMODES feature.
+
+	* ircd/channel.c: Add a security to prevent bad DEFCHMODES strings (like +cn-n).
+
+2005-12-24  Romain Bignon <progs@headfucking.net>
+
+	* ircd/channel.c, ircd/m_topic: Fixed two bugs about topics:
+	- topic burst didn't work
+	- when an user on a ircoderz1 server sent a topic, we didn't see it on ircoderz2 server. It was
+	a protocole problem.
+
+2005-12-23 Benjamin Beret <kouak@kouak.org>
+	* ircd/m_whois.c: No longer use PRIV_SEE_CHAN in /whois, because
+	of issues with remote whois.
+
+2005-12-23  Kevin L. Mitchell  <klmitch@mit.edu>
+
+	* ircd/m_join.c: get rid of MAGIC_REMOTE_JOIN_TS; perform the
+	deop-other-users loop only when creation < channel timestamp or
+	when the channel in question happens to be a zannel; actually deop
+	users, don't just say we are and not do it
+
+	* ircd/m_create.c (ms_create): get rid of MAGIC_REMOTE_JOIN_TS
+
+	* include/channel.h: get rid of MAGIC_REMOTE_JOIN_TS
+
+2005-12-13  Michael Poole <mdpoole@troilus.org>
+
+	* ircd/m_join.c (ms_join): Prevent net rides allowed by moving the
+	channel timestamp backwards in time without deopping current ops.
+	(Reported by Wouter Coekaerts.)
+
+2005-12-13  Michael Poole <mdpoole@troilus.org>
+
+	* doc/example.conf: Remove extraneous "Other" Client block.
+
+	* ircd/convert-conf.c (finish_operators): Fix operator precedence bug.
+
+	* ircd/ircd_parser.y (clientclass): Fix typo in error message.
+
+2005-11-27  Michael Poole <mdpoole@troilus.org>
+
+	* ircd/m_join.c (m_join): Count a join to a new channel as a
+	target change.
+
+2005-11-19  Michael Poole <mdpoole@troilus.org>
+
+	* ircd/s_stats.c (stats_servers_verbose): Display IPv6 support
+	flag with the other per-server flags.
+
+2005-11-19  Michael Poole <mdpoole@troilus.org>
+
+	* ircd/convert-conf.c (finish_features): Only emit "Features {"
+	once in the converted configuration file.  Display the original
+	input line for each feature line in the output.
+
+2005-11-15  Brian Cline <brian.cline@gmail.com>
+
+	* doc/example.conf: Add new line for HIS_MODEWHO feature.
+
+	* doc/readme.features: Document new HIS_MODEWHO feature.
+
+	* include/ircd_features.h: Declare new HIS_MODEWHO feature.
+
+	* ircd/channel.c (modebuf_flush_int): Use new HIS_MODEWHO feature
+	to show or hide the server name that performed a channel mode change.
+
+	* ircd/ircd_features.c: Place new HIS_MODEWHO setting in the feature
+	table and give it a default value of true, which will hide the
+	originating server name.
+
+2005-11-16  Michael Poole <mdpoole@troilus.org>
+
+	* doc/example.conf (Features): Mention ZANNELS default.
+
+	* doc/readme.features: Document OPLEVELS and ZANNELS.
+
+2005-11-17  Carlo Wood <run@alinoe.com>
+
+	* include/ircd_features.h (Feature): Add ZANNELS.
+	* ircd/ircd_features.c (FeatureDesc): idem.
+	* ircd/channel.c (sub1_from_channel): Don't keep zannels
+	around when ZANNELS and OPLEVELS are FALSE.
+	* ircd/m_destruct.c (ms_destruct): Use JOIN instead of
+	CREATE to recreate a non-empty channel after DESTRUCT.
+
+2005-11-16  Michael Poole <mdpoole@troilus.org>
+
+	* tools/convert-conf.py: Delete obsolete code.
+
+2005-11-16  Michael Poole <mdpoole@troilus.org>
+
+	* ircd/m_names.c (m_names): Fix handling of NAMES #a,#b.
+	(ms_names): Likewise.
+
+2005-11-15  Michael Poole <mdpoole@troilus.org>
+
+	* ircd/m_nick.c (ms_nick): Clarify message when an older nick
+	overrules a newer nick.  When killing a client for a nick
+	collision, make sure to use the numnick as the first argument.
+
+2005-11-14  Michael Poole <mdpoole@troilus.org>
+
+	* ircd/channel.c (member_can_send_to_channel): After prodding from
+	reed, always allow remote users to send to a channel.  He also
+	pointed out a bug in the first version of this change.
+
+2005-11-14  Carlo Wood <run@alinoe.com>
+
+	* ircd/channel.c (modebuf_flush_int): Fix test for limitdel.
+	(modebuf_mode_uint): Make sure the limit is included as an
+	argument when necessary (and only when necessary) in a bounce.
+
+	* ircd/m_destruct.c (ms_destruct): Generate a mode bounce instead
+	of burst to resynchronize a non-empty destructed channel.
+
+2005-11-14  Michael Poole <mdpoole@troilus.org>
+
+	* ircd/channel.c (find_no_nickchange_channel): Disallow nick
+	changes by voiceless no-account users on a +r channel.
+
+2005-11-14  Michael Poole <mdpoole@troilus.org>
+
+	* ircd/m_kick.c (ms_kick): Fix test for whether a client's own
+	server is kicking him.
+
+2005-11-13  Carlo Wood <run@alinoe.com>
+
+	* ircd/m_create (ms_create): Accept CREATE for zannels.
+
+	* ircd/m_join.c (m_join): MODE +o for a zannel must come from the
+	server for compatibility with older versions.
+
+2005-11-11  Michael Poole <mdpoole@troilus.org>
+
+	* ircd/ircd_res.c (proc_answer): Follow CNAME when doing A
+	and AAAA lookups as well as PTR.
+
+2005-11-07  Michael Poole <mdpoole@troilus.org>
+
+	* ircd/channel.c (mode_parse_client): Allow clients to specify
+	oplevel in MODE #channel +o.
+	(mode_process_clients): Allow oplevel 999 to deop another 999.
+
+	* ircd/kick.c (m_kick): Allow oplevel 999 to kick another 999.
+
+2005-11-02  Romain Bignon <progs@headfucking.net>
+
+	* ircd/channel.c: Use of Michael Poole amelioration of my patch.
+
+	* ircd/channel.c,ircd/gline.c,ircd/jupe.c: Correct use of HIS_SNOTICE: if it's true, we show
+	servername and not real sender.
+
+	* ircd/channel.c (sub1_from_channel): Do not send delayed DESTRUCT if OPLEVELS feature is setted to
+	false. But if there is a OPLEVELS=true server in network there is a desynch: a channel which is
+	totaly deleted on my server will be a zannel on a OPLEVELS=true server.
+
+	* ircd/ircd_parser.y: Add parsing of PRIV_LIST_CHAN in configuration. (Thanks to BuGs to report it)
+
+	* ircd/s_user.c: Do not send quit/join[/modes] to an relogued user who have already a hiddenhost.
+	Use of AC XXYYY abc, AC XXYYY NULL and AC XXYYY abc (beacause with an unaccount, user will save his
+	hiddenhost).
+
+2005-10-30  Michael Poole <mdpoole@troilus.org>
+
+	* ircd/channel.c (mode_parse_apass): Move all send_reply() errors
+	inside an if (MyUser(state->sptr)) test.
+
+	* ircd/m_join.c (m_join): Reorganize zannel join check to match
+	surrounding code.
+
+2005-10-30  Carlo Wood <run@alinoe.com>
+
+	* ircd/channel.c (sub1_from_channel): Delay destruction for -A
+	channels.  They become zombie channels (zannels).
+	(mode_parse_upass): Add duration to ERR_NOMANAGER message.
+	(mode_parse_apass): Likewise.  Unconditionally set the member who
+	sets Apass as oplevel 0.  Clear Upass when clearing Apass.
+	(joinbuf_join): Remove code to pass oplevel in JOIN.
+
+	* ircd/m_burst.c (ms_burst): Handle zannels.
+
+	* ircd/m_join.c (m_join): Handle a join to a zannel.  If the user
+	is joining with ops and/or an oplevel, send those.
+	(ms_join): Stop trying to parse oplevels in JOIN.  Copy join
+	timestamp when a user joins a zannel.
+
+	* ircd/m_mode.c (ms_mode): Never generate HACK3.  Silently allow a
+	user to op himself if he is the only one in a channel.
+
+	* ircd/s_err.c (ERR_UPASSSET): Remove extra space.
+	(ERR_UPASSNOTSET): Likewise.
+	(ERR_NOMANAGER): Add field for channel lifetime.
+
+2005-10-30  Romain Bignon <progs@headfucking.net>
+
+	* ircd/m_restart.c,ircd/m_die.c: add a reason in message.
+
+2005-10-29  Romain Bignon <progs@headfucking.net>
+
+	* ircd/ircd_features.c: add DEFCHMODES feature
+
+	* ircd/channel.c,ircd/m_join.c: use of DEFCHMODES feature. It sets default channel modes.
+
+	* include/ircd_defs.h: compatibility with ircoderz (ACCOUNTLEN)
+
+	* ircd/m_burst.c: IRC Operators are protected against net riders.
+
+2005-10-27  Romain Bignon <progs@headfucking.net>
+
+	* ircd/ircd_log.c: Add a LS_SETHOST flag for log_write()
+
+	* ircd/s_user.c: Use of LS_SETHOST in set_vhost()
+
+	* ircd/s_user.c: Changement des règles lors de la mise d'une vhost prefixed, valable si
+	l'oper n'est pas ircop ou si SETHOST_FREEFORM est faux.
+
+	* s_stats.c: Affichage dans le /stats s du status préfixé ou non d'une vhost.
+
+	* ircd/ircd_snprintf.c: rajout du flag %#R pour afficher nick!user@realhost (en parralèle à %#C)
+
+	* ircd/s_user.c,ircd/m_oper.c: application.
+
+	* ircd/channel.c: correction d'un bug ircu de propagation du mode +d: c'est un mode *local* et
+	il ne doit pas être propagé sur les autres serveurs.
+
+	* ircd/m_kick.c: correction d'un typo d'ircu (%h -> %H)
+
+2005-10-25  Romain Bignon <progs@headfucking.net>
+
+	* ircd/m_account.c: Fixed a crash when a registered user have a new account.
+
+	* ircd/s_user.c: Use of a better notice when an use got an auto vhost.
+
+	* ircd/m_whois.c: Fixed a bug, it didn't showed realhost to me if i juste have a crypthost.
+
+	* ircd/m_check.c: Approximately the same bug.
+
+	* ircd/m_check.c: Fixed an other bug with /check server, in users count. (Thanks to BuGs)
+
+	* ircd/m_kill.c: Notice showed in path host and not realhost.
+
+	* ircd/m_join.c: Use of ERR_BADCHANNAME for a join in a glined channel. There is in
+	reason of gline.
+
+2005-10-24  Romain Bignon <progs@headfucking.net>
+
+	* ircd/s_user.c,doc/example.conf: We can now use a crypted password with SetHost blocks in conf.
+
+	* ircd/channel.c: fixed a crash (thanks to BuGs)
+
+2005-10-23  Romain Bignon <progs@headfucking.net>
+
+	* ircd/gline.c: fixed a bug with /gline
+
+	* ircd/s_user.c: disallow local users to set +H
+
+	* configure.in: show configuration report
+
+	* ircd/channel.c,ircd/m_check.c,ircd/m_kick.c,ircd/m_svscmds.c,ircd/s_user.c: fixed warnings
+
+	* ircd/channel.c: fixed a bug which showed a delayed ircop when he wanted to show banlist
+
+	* ircd/send.c: add sendto_allops_butserv()
+
+	* ircd/m_sno.c: before, when a server received a SNO, it wanted to send it to sender too
+
+	* ircd/m_who.c: use of PRIV_WHOX
+
+	* ircd/Makefile.in: correction
+
+	* ircd/gline.c: fixed a crash
+
+	* include/s_user.h: Declare isupport manipulation functions. (Michael Poole / Dianora)
+
+	* include/supported.h: Delete. (Michael Poole / Dianora)
+
+	* ircd/ircd.c (main): Call init_isupport(). (Michael Poole / Dianora)
+
+	* ircd/ircd_features.c (set_isupport_*): New functions to set
+	feature-based isupport settings. (Michael Poole / Dianora)
+
+	* ircd/m_defaults.c: Remove unused #include "supported.h". (Michael Poole / Dianora)
+
+	* ircd/m_proto.c: Likewise. (Michael Poole / Dianora)
+
+	* ircd/m_version.c: Likewise. (Michael Poole / Dianora)
+
+	* ircd/s_user.c: Remove #include "supported.h".  Declare new
+	struct ISupport. (Michael Poole / Dianora)
+	(isupport): New file-scope variable.
+	(isupport_lines): Likewise.
+	(touch_isupport): New function.
+	(get_clean_isupport): New function.
+	(add_isupport*): New functions.
+	(del_isupport): New function.
+	(build_isupport_lines): New function.
+	(init_isupport): New function.
+	(send_supported): Rewrite to use the above.
+
+	* ircd/Makefile.in: Update dependencies. (Michael Poole / Dianora)
+
+2005-10-23 David Cortier <Cesar@ircube.org>
+	* ircd/s_user.c: correct/simplify is_hostmask()
+
+	* ircd/channel.c: enhance pretty_mask() to prevent blank fields
+
+2005-10-23 Benjamin Beret <kouak@kouak.org>
+	* ircd/s_user.c: Be more permissive about userIDs (a-zA-Z0-9/-/_/./[/])
+
+2005-10-22  Romain Bignon <progs@headfucking.net>
+
+	* ircd/m_who.c: fixed a little bug. WHO showed crypthost rather than "host"
+
+	* ircd/s_user.c: correction of is_hostmask, considers that there is only a
+	host (and not user@host). Now checking is correct.
+
+2005-10-22 Benjamin Beret <kouak@kouak.org>
+	* ircd/channel.c: Fix a crash in mode_parse
+
+2005-10-21 Benjamin Beret <kouak@kouak.org>
+	* ircd/m_who.c: Add < before channame if delayed (like in whois)
+
+	* ircd/ircd_res.c: Don't send retries if the client did
+	not resolve (SERVFAIL); this fixes a bug causing a flurry
+	of retries in this case (Diane Bruce)
+
+	* ircd/m_who.c: /who x now properly returns real hostname, remove
+	s flag for non-oper who, fix help messages (french -> english)
+
+	* include/ircd_defs.h: Restore NICKLEN to 30
+
+	* ircd/m_list.c: Remove S flag, autoset it for opers
+
+	* ircd/channel.c: Reveal opers who set mode without being opped
+
+	* ircd/whowas.c: Bugfix ?
+
+2005-10-16  Romain Bignon <progs@headfucking.net>
+
+	* ircd/m_who.c: new who's version (from bahamut)
+
+2005-10-15  Romain Bignon <progs@headfucking.net>
+
+	* ircd/s_err.c: modification of ERR_ISOPERLCHAN reply
+
+	* ircd/hash.c: (/list) fixe a litle bug, not forget that we HAVE to use /list s to
+	see secrets channels
+
+	* ircd/m_list.c: add modes in string of listed channels (if i am ircop)
+
+	* ircd/ircd_feature.c,ircd/m_gline.c: add USER_GLIST feature to allow user to use
+	/gline (Michael Poole)
+
+	* ircd/s_conf.c: Fix setting of FLAG_DOID and buglet from last commit
+	(Michael Pool and Jukka Ollila)
+
+	* ircd/ircd_parser.y: Allow setting Client port (Michael Poole)
+
+	* ircd/class.c: Keep invalid classes in list until next rehash (Michael Poole)
+
+	* ircd/m_names.c: Fix format string when forwarding /names -D to other servers and
+	add support for remote /names -D (Michael Poole)
+
+	* ircd/m_join.c: Report too-long channel names as non-existent (Michael Poole)
+
+	* ircd/channel.c: Delete unused function (Michael Poole)
+
+	* ircd/s_stats.c,ircd/m_stats.c: Add new "Local" only flag to /stats (Perry Lorier)
+
+	* ircd/client.c: Make default global oper privileges match what was
+	in 2.10.11 (Michael Poole)
+
+2005-10-09  Romain Bignon <progs@headfucking.net>
+
+	* ircd/ircd_parser.y,ircd_lexer.l,s_conf.c,s_conf.h: Added a SetHost block
+
+	* ircd/s_user.c,client.h,numeric.h,s_err.c: Added a +H mode and set_vhost() function
+
+	* ircd/ircd_features.c,include/ircd_features.h,doc/example.conf,doc/readme.features:
+	Added SETHOST, SETHOST_FREEFORM, SETHOST_UNSET, SETHOST_AUTO, SETHOST_USER
+	and HIS_STATS_s features
+
+	* ircd/parse.c,include/msg.h,ircd/m_sethost.c: SETHOST command
+
+	* ircd/s_stats.c: /stats s
+
+	* ircd/m_whois.c: Show if an irc opérateur is a channel service
+
+	* ircd/channel.c: Support a check ban on an user with a virtual host
+
+	* include/ircd_defs.h: Change size of a few defines (nb: NICKLEN == 20 != 30)
+
+	* ircd/s_user.c: Add FEAT_HIS_REWRITE support in set_vhost() and hide_hostmask()
+
+	* ircd/m_svscmds.c: you can use SVSMODE to set a virtual host (+H <vhost>)
+
+	* ircd/m_userhost.c,ircd/m_userip.c: hide realhost to non opers
+
+2005-10-09 David Cortier <Cesar@ircube.org>
+	* ircd/channel.c, ircd/m_burst.c, ircd/m_kick.c, ircd/s_misc.c: Use of FEAT_HIS_REWRITE to hide
+	mode/topic/kick source if it's a server instead of hardcoding the HIS.
+
+2005-10-08 Benjamin Beret <kouak@kouak.org>
+	* ircd/channel.c: Check bans on realhost
+
+	* ircd/m_whois.c: Extend use of priv see_chan to /whois
+
+	* ircd/m_invite.c: Send wallchops instead of RPL_ISSUEDINVITE
+
+	* ircd/s_user.c: Prevent svsmode from +oOp'ing someone
+
+	* ircd/m_kick.c, channel.c: Send ERR_ISOPERLCHAN instead of snotice when trying to kick or deop a
+	protected oper
+
+	* include/client.h, ircd/client.c, ircd/ircd_lexer.l, ircd/ircd_parser.y, doc/example.conf, ircd/convert-conf.c: Remove walk_lchan and deop_lchan privs and replace them by joinx and protected
+
+	* ircd/m_join.c, ircd/channel.c: Likewise
+
+2005-10-07  David Cortier <Cesar@ircube.org>
+	* ircd/m_whois.c, ircd/m_names.c: strings optimization
+
+2005-10-07  Benjamin Beret <kouak@kouak.org>
+	* ircd/channel.c: Typo (?), light correction and optimisation of +cC chanmodes.
+
+	* ircd/m_kick.c, ChangeLog: French -> English
+
+	* ircd/channel.c, ircd/m_clearmode.c, ircd/ircd_relay.c, include/supported.h: Mode +N which
+	blocks channotices (though wallvoices & wallchops are still available)
+
+	* include/ircd_feature.h, ircd/ircd.feature.c, doc/readme.features, doc/example.conf:
+	Remove FEAT_OPERFREEMODE
+
+	* include/client.h, ircd/client.c, ircd/ircd_lexer.l, ircd/ircd_parser.y, doc/example.conf:
+	Replace FEAT_OPERFREEMODE by a global-oper privilege : "operfreemode"
+
+	* ircd/channel.c, ircd/m_mode.c: Debug /mode, prevent opers from /mode if not members and send
+	ERR_NOTONCHANNEL
+
+
+2005-10-07  Romain Bignon <progs@headfucking.net>
+
+	* ircd/m_mode.c: Servers aren't bothered when sending an "unvalid" mode
+
+	* ircd/m_check.c: /check command for opers
+
+	* ircd/ircd_feature.c: Fline FEAT_EXTENDED_CHECKCMD
+
+	* ircd/gline.c, ircd/m_gline.c: support du gline nick!user@host avec des petites corrections
+	par-ci par-là...
+
+2005-10-05  Romain Bignon <progs@headfucking.net>
+
+	* ircd/channel.c: Modes +Cc (no ctcp et no colors) and new prototype for client_can_send_to_channel
+
+	* ircd/ircd_feature.c: Feature FEAT_OPERFREEMODE to allow opers to /mode without being chanops.
+
+	* ircd/channel.c,ircd/m_mode.c: Likewise.
+
+2005-10-02  Romain Bignon <progs@headfucking.net>
+
+	* ircd/hash.c: /list now sends chanmodes and +sp channels to opers
+
+	* ircd/send.c: Fonction sendto_allops()
+
+	* ircd/m_sno.c: Propagation of SNOs
+
+	* ircd/m_oper.c: Propagate /oper to all servers, shows the used o-block
+
+	* ircd/m_account.c: Allow unaccounting
+
+	* ircd/m_svscmds.c: Fonctions ms_svsnick and ms_svsmode (SN et SM)
+
+	* ircd/s_user.c: Svsmode support
+
+	* ircd/m_join.c: Add /join x for opers, to override blocking modes (+brkli)
+
+	* ircd/m_kick.c: IRCu bug correction, do not propagate KICK of a delayed user
+
+	* ircd/s_user.c: Flag oper +p
+
+	* ircd/channel.c,ircd/s_bsd.c,ircd/m_kick.c: Likewise
+
+2005-10-01  Romain Bignon <progs@headfucking.net>
+
+	* README,INSTALL,BUGS: IRCoderz updates
+
+	* TODO,ChangeLog: New versions
+
+	* CODERZ.features: Creation
+
+	* include/struct.h, ircd/s_user.c, ircd/ircd_md2.c, ircd/channel.c, ircd/m_whois.c: Hostnames
+	cloaking
+
+2005-10-01  Romain Bignon <progs@headfucking.net>
+
+	* IRCoderz v2, based on ircu2.10.12

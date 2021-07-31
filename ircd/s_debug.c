@@ -16,11 +16,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: s_debug.c,v 1.7 2005/05/05 18:18:10 bugs Exp $
- *
  */
-#include "../config.h"
+/** @file
+ * @brief Debug support for the ircd.
+ * @version $Id: s_debug.c,v 1.1.1.1 2005/10/01 17:28:31 progs Exp $
+ */
+#include "config.h"
 
 #include "s_debug.h"
 #include "channel.h"
@@ -36,6 +37,7 @@
 #include "ircd.h"
 #include "jupe.h"
 #include "list.h"
+#include "listener.h"
 #include "motd.h"
 #include "msgq.h"
 #include "numeric.h"
@@ -43,17 +45,14 @@
 #include "res.h"
 #include "s_bsd.h"
 #include "s_conf.h"
+#include "s_user.h"
 #include "s_stats.h"
 #include "send.h"
-#include "shun.h"
-#ifdef USE_SSL
-#include "ssl.h"
-#endif /* USE_SSL */
-#include "ircd_struct.h"
+#include "struct.h"
 #include "sys.h"
 #include "whowas.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
@@ -66,10 +65,10 @@
  * Option string.  Must be before #ifdef DEBUGMODE.
  */
 static char serveropts[256]; /* should be large enough for anything */
-#ifdef DEBUGMODE
-static int loop = 0;
-#endif
 
+/** Return a string describing important configuration information.
+ * @return Pointer to a static buffer.
+ */
 const char* debug_serveropts(void)
 {
   int bp;
@@ -100,64 +99,35 @@ const char* debug_serveropts(void)
   AddC('D');
 #endif
 
-  if (feature_bool(FEAT_OPER_REHASH))
-    AddC('E');
-
-  if (feature_bool(FEAT_OPER_NO_CHAN_LIMIT))
-    AddC('F');
-
   if (feature_bool(FEAT_HUB))
     AddC('H');
-
-  if (feature_bool(FEAT_SHOW_ALL_INVISIBLE_USERS))
-    AddC('I');
-  else if (feature_bool(FEAT_SHOW_INVISIBLE_USERS))
-    AddC('i');
-
-  if (feature_bool(FEAT_OPER_KILL)) {
-    if (feature_bool(FEAT_LOCAL_KILL_ONLY))
-      AddC('k');
-    else
-      AddC('K');
-  }
 
   if (feature_bool(FEAT_IDLE_FROM_MSG))
     AddC('M');
 
-  if (feature_bool(FEAT_CRYPT_OPER_PASSWORD))
-    AddC('p');
-
   if (feature_bool(FEAT_RELIABLE_CLOCK))
     AddC('R');
-
-  if (feature_bool(FEAT_OPER_RESTART))
-    AddC('S');
 
 #if defined(USE_POLL) && defined(HAVE_POLL_H)
   AddC('U');
 #endif
-
-  if (feature_bool(FEAT_VIRTUAL_HOST))
-    AddC('v');
-
-#ifdef USE_SSL
-  AddC('z');
-#endif /* USE_SSL */
+#ifdef  IPV6
+  AddC('6');
+#endif
 
   serveropts[i] = '\0';
 
   return serveropts;
 }
 
-/*
- * debug_init
- *
+/** Initialize debugging.
  * If the -t option is not given on the command line when the server is
  * started, all debugging output is sent to the file set by LPATH in config.h
  * Here we just open that file and make sure it is opened to fd 2 so that
- * any fprintf's to stderr also goto the logfile.  If the debuglevel is not
+ * any fprintf's to stderr also go to the logfile.  If the debuglevel is not
  * set from the command line by -x, use /dev/null as the dummy logfile as long
- * as DEBUGMODE has been defined, else dont waste the fd.
+ * as DEBUGMODE has been defined, else don't waste the fd.
+ * @param use_tty Passed to log_debug_init().
  */
 void debug_init(int use_tty)
 {
@@ -170,8 +140,15 @@ void debug_init(int use_tty)
 }
 
 #ifdef DEBUGMODE
+/** Log a debug message using a va_list.
+ * If the current #debuglevel is less than \a level, do not display.
+ * @param level Debug level for message.
+ * @param form Format string, passed to log_vwrite().
+ * @param vl Varargs argument list for format string.
+ */
 void vdebug(int level, const char *form, va_list vl)
 {
+  static int loop = 0;
   int err = errno;
 
   if (!loop && (debuglevel >= 0) && (level <= debuglevel))
@@ -183,6 +160,11 @@ void vdebug(int level, const char *form, va_list vl)
   errno = err;
 }
 
+/** Log a debug message using a variable number of arguments.
+ * This is a simple wrapper around debug(\a level, \a form, vl).
+ * @param level Debug level for message.
+ * @param form Format string of message.
+ */
 void debug(int level, const char *form, ...)
 {
   va_list vl;
@@ -191,21 +173,23 @@ void debug(int level, const char *form, ...)
   va_end(vl);
 }
 
+/** Send a literal RPL_STATSDEBUG message to a user.
+ * @param cptr Client to receive the message.
+ * @param msg Text message to send to user.
+ */
 static void debug_enumerator(struct Client* cptr, const char* msg)
 {
   assert(0 != cptr);
   send_reply(cptr, SND_EXPLICIT | RPL_STATSDEBUG, ":%s", msg);
 }
 
-/*
- * This is part of the STATS replies. There is no offical numeric for this
- * since this isnt an official command, in much the same way as HASH isnt.
- * It is also possible that some systems wont support this call or have
- * different field names for "struct rusage".
- * -avalon
+/** Send resource usage statistics to a client.
+ * @param cptr Client to send data to.
+ * @param sd StatDesc that generated the stats request (ignored).
+ * @param param Extra parameter from user (ignored).
  */
-void send_usage(struct Client *cptr, struct StatDesc *sd, int stat,
-		char *param)
+void send_usage(struct Client *cptr, const struct StatDesc *sd,
+                char *param)
 {
   os_get_rusage(cptr, CurrentTime - cli_since(&me), debug_enumerator);
 
@@ -214,11 +198,17 @@ void send_usage(struct Client *cptr, struct StatDesc *sd, int stat,
 }
 #endif /* DEBUGMODE */
 
-void count_memory(struct Client *cptr, struct StatDesc *sd, int stat,
-		  char *param)
+/** Report memory usage statistics to a client.
+ * @param cptr Client to send data to.
+ * @param sd StatDesc that generated the stats request (ignored).
+ * @param param Extra parameter from user (ignored).
+ */
+void count_memory(struct Client *cptr, const struct StatDesc *sd,
+                  char *param)
 {
   struct Client *acptr;
   struct SLink *link;
+  struct Ban *ban;
   struct Channel *chptr;
   struct ConfItem *aconf;
   const struct ConnectionClass* cltmp;
@@ -229,36 +219,37 @@ void count_memory(struct Client *cptr, struct StatDesc *sd, int stat,
       cn = 0,                   /* connections */
       ch = 0,                   /* channels */
       lcc = 0,                  /* local client conf links */
-      us = 0,                   /* user structs */
       chi = 0,                  /* channel invites */
       chb = 0,                  /* channel bans */
       wwu = 0,                  /* whowas users */
       cl = 0,                   /* classes */
       co = 0,                   /* conf lines */
+      listeners = 0,            /* listeners */
       memberships = 0;          /* channel memberships */
 
   int usi = 0,                  /* users invited */
       aw = 0,                   /* aways set */
       wwa = 0,                  /* whowas aways */
       gl = 0,                   /* glines */
-      sh = 0,                   /* shuns */
       ju = 0;                   /* jupes */
 
   size_t chm = 0,               /* memory used by channels */
       chbm = 0,                 /* memory used by channel bans */
       cm = 0,                   /* memory used by clients */
       cnm = 0,                  /* memory used by connections */
+      us = 0,                   /* user structs */
+      usm = 0,                  /* memory used by user structs */
       awm = 0,                  /* memory used by aways */
       wwam = 0,                 /* whowas away memory used */
       wwm = 0,                  /* whowas array memory used */
       glm = 0,                  /* memory used by glines */
-      shm = 0,                  /* memory used by shuns */
       jum = 0,                  /* memory used by jupes */
       com = 0,                  /* memory used by conf lines */
       dbufs_allocated = 0,      /* memory used by dbufs */
       dbufs_used = 0,           /* memory used by dbufs */
       msg_allocated = 0,	/* memory used by struct Msg */
       msgbuf_allocated = 0,	/* memory used by struct MsgBuf */
+      listenersm = 0,           /* memory used by listetners */
       rm = 0,                   /* res memory used */
       totcl = 0, totch = 0, totww = 0, tot = 0;
 
@@ -277,7 +268,6 @@ void count_memory(struct Client *cptr, struct StatDesc *sd, int stat,
     }
     if (cli_user(acptr))
     {
-      us++;
       for (link = cli_user(acptr)->invited; link; link = link->next)
         usi++;
       for (member = cli_user(acptr)->channel; member; member = member->next_channel)
@@ -288,11 +278,13 @@ void count_memory(struct Client *cptr, struct StatDesc *sd, int stat,
         awm += (strlen(cli_user(acptr)->away) + 1);
       }
     }
+
     if (IsAccount(acptr))
       acc++;
   }
   cm = c * sizeof(struct Client);
   cnm = cn * sizeof(struct Connection);
+  user_count_memory(&us, &usm);
 
   for (chptr = GlobalChannelList; chptr; chptr = chptr->next)
   {
@@ -300,10 +292,10 @@ void count_memory(struct Client *cptr, struct StatDesc *sd, int stat,
     chm += (strlen(chptr->chname) + sizeof(struct Channel));
     for (link = chptr->invites; link; link = link->next)
       chi++;
-    for (link = chptr->banlist; link; link = link->next)
+    for (ban = chptr->banlist; ban; ban = ban->next)
     {
       chb++;
-      chbm += (strlen(link->value.cp) + 1 + sizeof(struct SLink));
+      chbm += strlen(ban->who) + strlen(ban->banstr) + 2 + sizeof(*ban);
     }
   }
 
@@ -319,61 +311,53 @@ void count_memory(struct Client *cptr, struct StatDesc *sd, int stat,
   for (cltmp = get_class_list(); cltmp; cltmp = cltmp->next)
     cl++;
 
-#ifdef USE_SSL
   send_reply(cptr, SND_EXPLICIT | RPL_STATSDEBUG,
-             ":Clients %d(%zu) Connections %d(%zu) SSL %d", c, cm, cn, cnm, ssl_count());
-#else
+	     ":Clients %d(%zu) Connections %d(%zu)", c, cm, cn, cnm);
   send_reply(cptr, SND_EXPLICIT | RPL_STATSDEBUG,
-             ":Clients %d(%zu) Connections %d(%zu)", c, cm, cn, cnm);
-#endif /* USE_SSL */
-  send_reply(cptr, SND_EXPLICIT | RPL_STATSDEBUG,
-	     ":Users %d(%zu) Accounts %d(%zu) Invites %d(%zu)",
-	     us, us * sizeof(struct User), acc, acc * (ACCOUNTLEN + 1),
+	     ":Users %zu(%zu) Accounts %d(%zu) Invites %d(%zu)",
+             us, usm, acc, acc * (ACCOUNTLEN + 1),
 	     usi, usi * sizeof(struct SLink));
   send_reply(cptr, SND_EXPLICIT | RPL_STATSDEBUG,
 	     ":User channels %d(%zu) Aways %d(%zu)", memberships,
 	     memberships * sizeof(struct Membership), aw, awm);
-  send_reply(cptr, SND_EXPLICIT | RPL_STATSDEBUG, ":Attached confs %d(%zu)",
-	     lcc, lcc * sizeof(struct SLink));
 
   totcl = cm + cnm + us * sizeof(struct User) + memberships * sizeof(struct Membership) + awm;
   totcl += lcc * sizeof(struct SLink) + usi * sizeof(struct SLink);
 
-  send_reply(cptr, SND_EXPLICIT | RPL_STATSDEBUG, ":Conflines %d(%zu)", co,
-	     com);
-
-  send_reply(cptr, SND_EXPLICIT | RPL_STATSDEBUG, ":Classes %d(%zu)", cl,
-	     cl * sizeof(struct ConnectionClass));
+  send_reply(cptr, SND_EXPLICIT | RPL_STATSDEBUG, ":Conflines %d(%zu) Attached %d(%zu) Classes %d(%zu)",
+             co, com, lcc, lcc * sizeof(struct SLink),
+             cl, cl * sizeof(struct ConnectionClass));
 
   send_reply(cptr, SND_EXPLICIT | RPL_STATSDEBUG,
 	     ":Channels %d(%zu) Bans %d(%zu)", ch, chm, chb, chbm);
   send_reply(cptr, SND_EXPLICIT | RPL_STATSDEBUG,
-	     ":Channel membrs %d(%zu) invite %d(%zu)", memberships,
+	     ":Channel Members %d(%zu) Invites %d(%zu)", memberships,
 	     memberships * sizeof(struct Membership), chi,
 	     chi * sizeof(struct SLink));
 
   totch = chm + chbm + chi * sizeof(struct SLink);
 
   send_reply(cptr, SND_EXPLICIT | RPL_STATSDEBUG,
-	     ":Whowas users %d(%zu) away %d(%zu)", wwu,
-	     wwu * sizeof(struct User), wwa, wwam);
-  send_reply(cptr, SND_EXPLICIT | RPL_STATSDEBUG, ":Whowas array %d(%zu)",
-	     feature_int(FEAT_NICKNAMEHISTORYLENGTH), wwm);
+	     ":Whowas Users %d(%zu) Away %d(%zu) Array %d(%zu)",
+             wwu, wwu * sizeof(struct User), wwa, wwam,
+             feature_int(FEAT_NICKNAMEHISTORYLENGTH), wwm);
+
+  totww = wwu * sizeof(struct User) + wwam + wwm;
 
   motd_memory_count(cptr);
 
   gl = gline_memory_count(&glm);
-  sh = shun_memory_count(&shm);
   ju = jupe_memory_count(&jum);
   send_reply(cptr, SND_EXPLICIT | RPL_STATSDEBUG,
-	":Glines %d(%zu) Shuns %d(%zu) Jupes %d(%zu)", gl, glm, sh, shm, ju, jum);
-
-  totww = wwu * sizeof(struct User) + wwam + wwm;
+	     ":Glines %d(%zu) Jupes %d(%zu)", gl, glm, ju, jum);
 
   send_reply(cptr, SND_EXPLICIT | RPL_STATSDEBUG,
 	     ":Hash: client %d(%zu), chan is the same", HASHSIZE,
 	     sizeof(void *) * HASHSIZE);
 
+  count_listener_memory(&listeners, &listenersm);
+  send_reply(cptr, SND_EXPLICIT | RPL_STATSDEBUG,
+             ":Listeners allocated %d(%zu)", listeners, listenersm);
   /*
    * NOTE: this count will be accurate only for the exact instant that this
    * message is being sent, so the count is affected by the dbufs that
@@ -409,4 +393,3 @@ void count_memory(struct Client *cptr, struct StatDesc *sd, int stat,
 	     totww, totch, totcl, com, dbufs_allocated, msg_allocated,
 	     msgbuf_allocated);
 }
-

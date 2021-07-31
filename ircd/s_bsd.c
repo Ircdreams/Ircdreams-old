@@ -16,10 +16,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: s_bsd.c,v 1.14 2005/11/19 14:35:08 bugs Exp $
  */
-#include "../config.h"
+/** @file
+ * @brief Functions that now (or in the past) relied on BSD APIs.
+ * @version $Id: s_bsd.c,v 1.2 2005/10/02 08:36:04 progs Exp $
+ */
+#include "config.h"
 
 #include "s_bsd.h"
 #include "client.h"
@@ -27,6 +29,7 @@
 #include "channel.h"
 #include "class.h"
 #include "hash.h"
+#include "ircd_alloc.h"
 #include "ircd_log.h"
 #include "ircd_features.h"
 #include "ircd_osdep.h"
@@ -50,19 +53,15 @@
 #include "s_misc.h"
 #include "s_user.h"
 #include "send.h"
-#include "ircd_struct.h"
-#include "support.h"
+#include "struct.h"
 #include "sys.h"
 #include "uping.h"
 #include "version.h"
 
-#include <arpa/inet.h>
-#include <arpa/nameser.h>
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
-#include <resolv.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -72,17 +71,15 @@
 #include <sys/utsname.h>
 #include <unistd.h>
 
-#ifdef USE_POLL
-#include <sys/poll.h>
-#endif /* USE_POLL */
-
-#ifndef INADDR_NONE
-#define INADDR_NONE 0xffffffff
-#endif
-
+/** Array of my own clients, indexed by file descriptor. */
 struct Client*            LocalClientArray[MAXCONNECTIONS];
+/** Maximum file descriptor in current use. */
 int                       HighestFd = -1;
-struct sockaddr_in        VirtualHost;
+/** Default local address for outbound IPv4 connections. */
+struct irc_sockaddr       VirtualHost_v4;
+/** Default local address for outbound IPv6 connections. */
+struct irc_sockaddr       VirtualHost_v6;
+/** Temporary buffer for reading data from a peer. */
 static char               readbuf[SERVER_TCP_WINDOW];
 
 /*
@@ -107,43 +104,6 @@ const char* const TOS_ERROR_MSG	      = "error setting TOS for %s: %s";
 static void client_sock_callback(struct Event* ev);
 static void client_timer_callback(struct Event* ev);
 
-#if !defined(USE_POLL)
-#if FD_SETSIZE < (MAXCONNECTIONS + 4)
-/*
- * Sanity check
- *
- * All operating systems work when MAXCONNECTIONS <= 252.
- * Most operating systems work when MAXCONNECTIONS <= 1020 and FD_SETSIZE is
- *   updated correctly in the system headers (on BSD systems our sys.h has
- *   defined FD_SETSIZE to MAXCONNECTIONS+4 before including the system's headers 
- *   but sys/types.h might have abruptly redefined it so the check is still 
- *   done), you might already need to recompile your kernel.
- * For larger FD_SETSIZE your milage may vary (kernel patches may be needed).
- * The check is _NOT_ done if we will not use FD_SETS at all (USE_POLL)
- */
-#error "FD_SETSIZE is too small or MAXCONNECTIONS too large."
-#endif
-#endif
-
-#ifdef USE_SSL
-/* Helper routines */
-static IOResult client_recv(struct Client *cptr, char *buf, unsigned int length, unsigned int* count_out)
-{
-  if (cli_socket(cptr).ssl)
-    return ssl_recv(&cli_socket(cptr), buf, length, count_out);
-  else
-    return os_recv_nonb(cli_fd(cptr), buf, length, count_out);
-}
-
-static IOResult client_sendv(struct Client *cptr, struct MsgQ *buf, unsigned int *count_in, unsigned int *count_out)
-{
-  if (cli_socket(cptr).ssl)
-    return ssl_sendv(&cli_socket(cptr), buf, count_in, count_out);
-  else
-    return os_sendv_nonb(cli_fd(cptr), buf, count_in, count_out);
-}
-#endif /* USE_SSL */
-
 
 /*
  * Cannot use perror() within daemon. stderr is closed in
@@ -151,19 +111,14 @@ static IOResult client_sendv(struct Client *cptr, struct MsgQ *buf, unsigned int
  * been reassigned to a normal connection...
  */
 
-/*
- * report_error
- *
- * This a replacement for perror(). Record error to log and
- * also send a copy to all *LOCAL* opers online.
- *
- * text    is a *format* string for outputting error. It must
- *         contain only two '%s', the first will be replaced
- *         by the sockhost from the cptr, and the latter will
- *         be taken from sys_errlist[errno].
- *
- * cptr    if not NULL, is the *LOCAL* client associated with
- *         the error.
+/** Replacement for perror(). Record error to log.  Send a copy to all
+ * *LOCAL* opers, but only if no errors were sent to them in the last
+ * 20 seconds.
+ * @param text A *format* string for outputting error. It must contain
+ * only two '%s', the first will be replaced by the sockhost from the
+ * cptr, and the latter will be taken from sys_errlist[errno].
+ * @param who The client associated with the error.
+ * @param err The errno value to display.
  */
 void report_error(const char* text, const char* who, int err)
 {
@@ -172,7 +127,7 @@ void report_error(const char* text, const char* who, int err)
   const char*   errmsg = (err) ? strerror(err) : "";
 
   if (!errmsg)
-    errmsg = "Unknown error"; 
+    errmsg = "Unknown error";
 
   if (EmptyString(who))
     who = "unknown";
@@ -189,43 +144,43 @@ void report_error(const char* text, const char* who, int err)
 }
 
 
-/*
- * connect_dns_callback - called when resolver query finishes
- * if the query resulted in a successful search, reply will contain
- * a non-null pointer, otherwise reply will be null.
- * if successful start the connection, otherwise notify opers
+/** Called when resolver query finishes.  If the DNS lookup was
+ * successful, start the connection; otherwise notify opers of the
+ * failure.
+ * @param vptr The struct ConfItem representing the Connect block.
+ * @param hp A pointer to the DNS lookup results (NULL on failure).
  */
-static void connect_dns_callback(void* vptr, struct DNSReply* reply)
+static void connect_dns_callback(void* vptr, const struct irc_in_addr *addr, const char *h_name)
 {
   struct ConfItem* aconf = (struct ConfItem*) vptr;
+  assert(aconf);
   aconf->dns_pending = 0;
-  if (reply) {
-    memcpy(&aconf->ipnum, reply->hp->h_addr, sizeof(struct in_addr));
-    connect_server(aconf, 0, reply);
+  if (addr) {
+    memcpy(&aconf->address, addr, sizeof(aconf->address));
+    connect_server(aconf, 0);
   }
   else
-    sendto_opmask_butone(0, SNO_OLDSNO, "Connexion vers %s impossible: host lookup",
+    sendto_opmask_butone(0, SNO_OLDSNO, "Connect to %s failed: host lookup",
                          aconf->name);
 }
 
-/*
- * close_connections - closes all connections
- * close stderr if specified
+/** Closes all file descriptors.
+ * @param close_stderr If non-zero, also close stderr.
  */
 void close_connections(int close_stderr)
 {
   int i;
-  close(0);
-  close(1);
   if (close_stderr)
+  {
+    close(0);
+    close(1);
     close(2);
+  }
   for (i = 3; i < MAXCONNECTIONS; ++i)
     close(i);
 }
 
-/*
- * init_connection_limits - initialize process fd limit to
- * MAXCONNECTIONS
+/** Initialize process fd limit to MAXCONNECTIONS.
  */
 int init_connection_limits(void)
 {
@@ -243,12 +198,14 @@ int init_connection_limits(void)
   return 0;
 }
 
-/*
- * connect_inet - set up address and port and make a connection
+/** Set up address and port and make a connection.
+ * @param aconf Provides the connection information.
+ * @param cptr Client structure for the peer.
+ * @return Non-zero on success; zero on failure.
  */
 static int connect_inet(struct ConfItem* aconf, struct Client* cptr)
 {
-  static struct sockaddr_in sin, *locaddr = 0;
+  const struct irc_sockaddr *local;
   IOResult result;
   assert(0 != aconf);
   assert(0 != cptr);
@@ -256,65 +213,25 @@ static int connect_inet(struct ConfItem* aconf, struct Client* cptr)
    * Might as well get sockhost from here, the connection is attempted
    * with it so if it fails its useless.
    */
-  cli_fd(cptr) = socket(AF_INET, SOCK_STREAM, 0);
-  if (-1 == cli_fd(cptr)) {
-    cli_error(cptr) = errno;
-    report_error(SOCKET_ERROR_MSG, cli_name(cptr), errno);
+  if (irc_in_addr_valid(&aconf->origin.addr))
+    local = &aconf->origin;
+  else if (irc_in_addr_is_ipv4(&aconf->address.addr))
+    local = &VirtualHost_v4;
+  else
+    local = &VirtualHost_v6;
+  cli_fd(cptr) = os_socket(local, SOCK_STREAM, cli_name(cptr));
+  if (cli_fd(cptr) < 0)
     return 0;
-  }
-  if (cli_fd(cptr) >= MAXCLIENTS) {
-    report_error(CONNLIMIT_ERROR_MSG, cli_name(cptr), 0);
-    close(cli_fd(cptr));
-    cli_fd(cptr) = -1;
-    return 0;
-  }
-  /*
-   * Bind to a local IP# (with unknown port - let unix decide) so
-   * we have some chance of knowing the IP# that gets used for a host
-   * with more than one IP#.
-   *
-   * No we don't bind it, not all OS's can handle connecting with
-   * an already bound socket, different ip# might occur anyway
-   * leading to a freezing select() on this side for some time.
-   * I had this on my Linux 1.1.88 --Run
-   */
 
-  /*
-   * No, we do bind it if we have virtual host support. If we don't
-   * explicitly bind it, it will default to IN_ADDR_ANY and we lose
-   * due to the other server not allowing our base IP --smg
-   */
-  if (aconf->origin.s_addr != INADDR_NONE) {
-    memset(&sin, 0, sizeof sin );
-    sin.sin_family = AF_INET;
-    sin.sin_addr.s_addr = aconf->origin.s_addr; 
-    locaddr = &sin; 
-  } else if (feature_bool(FEAT_VIRTUAL_HOST)) 
-     locaddr = &VirtualHost; 
-
-  if(locaddr
-	&& bind(cli_fd(cptr), (struct sockaddr*) locaddr, sizeof *locaddr)) {
-
-    report_error(BIND_ERROR_MSG, cli_name(cptr), errno);
-    close(cli_fd(cptr));
-    cli_fd(cptr) = -1;
-    return 0;
-  }
-
-  memset(&sin, 0, sizeof(sin));
-  sin.sin_family      = AF_INET;
-  sin.sin_addr.s_addr = aconf->ipnum.s_addr;
-  sin.sin_port        = htons(aconf->port);
   /*
    * save connection info in client
    */
-  (cli_ip(cptr)).s_addr = aconf->ipnum.s_addr;
-  cli_port(cptr)        = aconf->port;
-  ircd_ntoa_r(cli_sock_ip(cptr), (const char*) &(cli_ip(cptr)));
+  memcpy(&cli_ip(cptr), &aconf->address.addr, sizeof(cli_ip(cptr)));
+  ircd_ntoa_r(cli_sock_ip(cptr), &cli_ip(cptr));
   /*
    * we want a big buffer for server connections
    */
-  if (!os_set_sockbufs(cli_fd(cptr), SERVER_TCP_WINDOW, SERVER_TCP_WINDOW)) {
+  if (!os_set_sockbufs(cli_fd(cptr), feature_int(FEAT_SOCKSENDBUF), feature_int(FEAT_SOCKRECVBUF))) {
     cli_error(cptr) = errno;
     report_error(SETBUFS_ERROR_MSG, cli_name(cptr), errno);
     close(cli_fd(cptr));
@@ -322,16 +239,12 @@ static int connect_inet(struct ConfItem* aconf, struct Client* cptr)
     return 0;
   }
   /*
-   * ALWAYS set sockets non-blocking
+   * Set the TOS bits - this is nonfatal if it doesn't stick.
    */
-  if (!os_set_nonblocking(cli_fd(cptr))) {
-    cli_error(cptr) = errno;
-    report_error(NONB_ERROR_MSG, cli_name(cptr), errno);
-    close(cli_fd(cptr));
-    cli_fd(cptr) = -1;
-    return 0;
+  if (!os_set_tos(cli_fd(cptr), FEAT_TOS_SERVER)) {
+    report_error(TOS_ERROR_MSG, cli_name(cptr), errno);
   }
-  if ((result = os_connect_nonb(cli_fd(cptr), &sin)) == IO_FAILURE) {
+  if ((result = os_connect_nonb(cli_fd(cptr), &aconf->address)) == IO_FAILURE) {
     cli_error(cptr) = errno;
     report_error(CONNECT_ERROR_MSG, cli_name(cptr), errno);
     close(cli_fd(cptr));
@@ -352,28 +265,13 @@ static int connect_inet(struct ConfItem* aconf, struct Client* cptr)
   return 1;
 }
 
-/*
- * deliver_it
- *   Attempt to send a sequence of bytes to the connection.
- *   Returns
- *
- *   < 0     Some fatal error occurred, (but not EWOULDBLOCK).
- *           This return is a request to close the socket and
- *           clean up the link.
- *
- *   >= 0    No real error occurred, returns the number of
- *           bytes actually transferred. EWOULDBLOCK and other
- *           possibly similar conditions should be mapped to
- *           zero return. Upper level routine will have to
- *           decide what to do with those unwritten bytes...
- *
- *   *NOTE*  alarm calls have been preserved, so this should
- *           work equally well whether blocking or non-blocking
- *           mode is used...
- *
- *   We don't use blocking anymore, that is impossible with the
- *      net.loads today anyway. Commented out the alarms to save cpu.
- *      --Run
+/** Attempt to send a sequence of bytes to the connection.
+ * As a side effect, updates \a cptr's FLAG_BLOCKED setting
+ * and sendB/sendK fields.
+ * @param cptr Client that should receive data.
+ * @param buf Message buffer to send to client.
+ * @return Negative on connection-fatal error; otherwise
+ *  number of bytes sent.
  */
 unsigned int deliver_it(struct Client *cptr, struct MsgQ *buf)
 {
@@ -381,28 +279,13 @@ unsigned int deliver_it(struct Client *cptr, struct MsgQ *buf)
   unsigned int bytes_count = 0;
   assert(0 != cptr);
 
-#ifdef USE_SSL
-  switch (client_sendv(cptr, buf, &bytes_count, &bytes_written)) {
-#else
   switch (os_sendv_nonb(cli_fd(cptr), buf, &bytes_count, &bytes_written)) {
-#endif /* USE_SSL */
   case IO_SUCCESS:
     ClrFlag(cptr, FLAG_BLOCKED);
 
     cli_sendB(cptr) += bytes_written;
     cli_sendB(&me)  += bytes_written;
-    if (cli_sendB(cptr) > 1023) {
-      cli_sendK(cptr) += (cli_sendB(cptr) >> 10);
-      cli_sendB(cptr) &= 0x03ff;    /* 2^10 = 1024, 3ff = 1023 */
-    }
-    if (cli_sendB(&me) > 1023) {
-      cli_sendK(&me) += (cli_sendB(&me) >> 10);
-      cli_sendB(&me) &= 0x03ff;
-    }
-    /*
-     * XXX - hrmm.. set blocked here? the socket didn't
-     * say it was blocked
-     */
+    /* A partial write implies that future writes will block. */
     if (bytes_written < bytes_count)
       SetFlag(cptr, FLAG_BLOCKED);
     break;
@@ -417,27 +300,10 @@ unsigned int deliver_it(struct Client *cptr, struct MsgQ *buf)
   return bytes_written;
 }
 
-
-void release_dns_reply(struct Client* cptr)
-{
-  assert(0 != cptr);
-  assert(MyConnect(cptr));
-
-  if (cli_dns_reply(cptr)) {
-    assert(0 < cli_dns_reply(cptr)->ref_count);
-    --(cli_dns_reply(cptr))->ref_count;
-    cli_dns_reply(cptr) = 0;
-  }
-}
-
-/*
- * completed_connection
- *
- * Complete non-blocking connect()-sequence. Check access and
+/** Complete non-blocking connect()-sequence. Check access and
  * terminate connection, if trouble detected.
- *
- * Return  TRUE, if successfully completed
- *        FALSE, if failed and ClientExit
+ * @param cptr Client to which we have connected, with all ConfItem structs attached.
+ * @return Zero on failure (caller should exit_client()), non-zero on success.
  */
 static int completed_connection(struct Client* cptr)
 {
@@ -455,13 +321,13 @@ static int completed_connection(struct Client* cptr)
   if ((cli_error(cptr) = os_get_sockerr(cli_fd(cptr)))) {
     const char* msg = strerror(cli_error(cptr));
     if (!msg)
-      msg = "Erreur Inconnue";
-    sendto_opmask_butone(0, SNO_OLDSNO, "Connexion échoué vers %s: %s",
+      msg = "Unknown error";
+    sendto_opmask_butone(0, SNO_OLDSNO, "Connection failed to %s: %s",
                          cli_name(cptr), msg);
     return 0;
   }
   if (!(aconf = find_conf_byname(cli_confs(cptr), cli_name(cptr), CONF_SERVER))) {
-    sendto_opmask_butone(0, SNO_OLDSNO, "Ligne du Serveur Perdu pour %s", cli_name(cptr));
+    sendto_opmask_butone(0, SNO_OLDSNO, "Lost Server Line for %s", cli_name(cptr));
     return 0;
   }
   if (s_state(&(cli_socket(cptr))) == SS_CONNECTING)
@@ -475,7 +341,7 @@ static int completed_connection(struct Client* cptr)
    */
   newts = TStime();
   for (i = HighestFd; i > -1; --i) {
-    if ((acptr = LocalClientArray[i]) && 
+    if ((acptr = LocalClientArray[i]) &&
         (IsServer(acptr) || IsHandshake(acptr))) {
       if (cli_serv(acptr)->timestamp >= newts)
         newts = cli_serv(acptr)->timestamp + 1;
@@ -491,7 +357,7 @@ static int completed_connection(struct Client* cptr)
   cli_lasttime(cptr) = CurrentTime;
   SetFlag(cptr, FLAG_PINGSENT);
 
-  sendrawto_one(cptr, MSG_SERVER " %s 1 %Tu %Tu J%s %s%s +%s :%s",
+  sendrawto_one(cptr, MSG_SERVER " %s 1 %Tu %Tu J%s %s%s +%s6 :%s",
                 cli_name(&me), cli_serv(&me)->timestamp, newts,
 		MAJOR_PROTOCOL, NumServCap(&me),
 		feature_bool(FEAT_HUB) ? "h" : "", cli_info(&me));
@@ -499,11 +365,9 @@ static int completed_connection(struct Client* cptr)
   return (IsDead(cptr)) ? 0 : 1;
 }
 
-/*
- * close_connection
- *
- * Close the physical connection. This function must make
- * MyConnect(cptr) == FALSE, and set cptr->from == NULL.
+/** Close the physical connection.  Side effects: MyConnect(cptr)
+ * becomes false and cptr->from becomes NULL.
+ * @param cptr Client to disconnect.
  */
 void close_connection(struct Client *cptr)
 {
@@ -513,24 +377,14 @@ void close_connection(struct Client *cptr)
     ServerStats->is_sv++;
     ServerStats->is_sbs += cli_sendB(cptr);
     ServerStats->is_sbr += cli_receiveB(cptr);
-    ServerStats->is_sks += cli_sendK(cptr);
-    ServerStats->is_skr += cli_receiveK(cptr);
     ServerStats->is_sti += CurrentTime - cli_firsttime(cptr);
-    if (ServerStats->is_sbs > 1023) {
-      ServerStats->is_sks += (ServerStats->is_sbs >> 10);
-      ServerStats->is_sbs &= 0x3ff;
-    }
-    if (ServerStats->is_sbr > 1023) {
-      ServerStats->is_skr += (ServerStats->is_sbr >> 10);
-      ServerStats->is_sbr &= 0x3ff;
-    }
     /*
      * If the connection has been up for a long amount of time, schedule
      * a 'quick' reconnect, else reset the next-connect cycle.
      */
-    if ((aconf = find_conf_exact(cli_name(cptr), 0, cli_sockhost(cptr), CONF_SERVER))) {
+    if ((aconf = find_conf_exact(cli_name(cptr), cptr, CONF_SERVER))) {
       /*
-       * Reschedule a faster reconnect, if this was a automaticly
+       * Reschedule a faster reconnect, if this was a automatically
        * connected configuration entry. (Note that if we have had
        * a rehash in between, the status has been changed to
        * CONF_ILLEGAL). But only do this if it was a "good" link.
@@ -547,17 +401,7 @@ void close_connection(struct Client *cptr)
     ServerStats->is_cl++;
     ServerStats->is_cbs += cli_sendB(cptr);
     ServerStats->is_cbr += cli_receiveB(cptr);
-    ServerStats->is_cks += cli_sendK(cptr);
-    ServerStats->is_ckr += cli_receiveK(cptr);
     ServerStats->is_cti += CurrentTime - cli_firsttime(cptr);
-    if (ServerStats->is_cbs > 1023) {
-      ServerStats->is_cks += (ServerStats->is_cbs >> 10);
-      ServerStats->is_cbs &= 0x3ff;
-    }
-    if (ServerStats->is_cbr > 1023) {
-      ServerStats->is_ckr += (ServerStats->is_cbr >> 10);
-      ServerStats->is_cbr &= 0x3ff;
-    }
   }
   else
     ServerStats->is_ni++;
@@ -590,6 +434,10 @@ void close_connection(struct Client *cptr)
   }
 }
 
+/** Close all unregistered connections.
+ * @param source Oper who requested the close.
+ * @return Number of closed connections.
+ */
 int net_close_unregistered_connections(struct Client* source)
 {
   int            i;
@@ -600,51 +448,41 @@ int net_close_unregistered_connections(struct Client* source)
   for (i = HighestFd; i > 0; --i) {
     if ((cptr = LocalClientArray[i]) && !IsRegistered(cptr)) {
       send_reply(source, RPL_CLOSING, get_client_name(source, HIDE_IP));
-      exit_client(source, cptr, &me, "Fermeture par un IRCOP");
+      exit_client(source, cptr, &me, "Oper Closing");
       ++count;
     }
   }
   return count;
 }
 
-/*----------------------------------------------------------------------------
- * add_connection
- *
- * Creates a client which has just connected to us on the given fd.
+/** Creates a client which has just connected to us on the given fd.
  * The sockhost field is initialized with the ip# of the host.
  * The client is not added to the linked list of clients, it is
  * passed off to the auth handler for dns and ident queries.
- *--------------------------------------------------------------------------*/
-#ifdef USE_SSL
-void add_connection(struct Listener* listener, int fd, void *ssl) {
-#else
+ * @param listener Listening socket that received the connection.
+ * @param fd File descriptor of new connection.
+ */
 void add_connection(struct Listener* listener, int fd) {
-#endif /* USE_SSL */
-  struct sockaddr_in addr;
+  struct irc_sockaddr addr;
   struct Client      *new_client;
   time_t             next_target = 0;
 
   const char* const throttle_message =
-         "ERREUR :Votre host essaye de se (re)connecter trop rapidement\r\n";
+         "ERROR :Your host is trying to (re)connect too fast -- throttled\r\n";
        /* 12345678901234567890123456789012345679012345678901234567890123456 */
   const char* const register_message =
-         "ERREUR :Impossible de continuer votre enregistrement\r\n";
-  
+         "ERROR :Unable to complete your registration\r\n";
+
   assert(0 != listener);
 
- 
   /*
    * Removed preliminary access check. Full check is performed in m_server and
    * m_user instead. Also connection time out help to get rid of unwanted
-   * connections.  
+   * connections.
    */
   if (!os_get_peername(fd, &addr) || !os_set_nonblocking(fd)) {
     ++ServerStats->is_ref;
-#ifdef USE_SSL
-    ssl_murder(ssl, fd, NULL);
-#else
     close(fd);
-#endif /* USE_SSL */
     return;
   }
   /*
@@ -658,34 +496,35 @@ void add_connection(struct Listener* listener, int fd) {
    */
   os_disable_options(fd);
 
-  /*
-   * Add this local client to the IPcheck registry.
-   *
-   * If they're throttled, murder them, but tell them why first.
-   */
-  if (!IPcheck_local_connect(addr.sin_addr, &next_target) && !listener->server) {
-    ++ServerStats->is_ref;
-#ifdef USE_SSL
-     ssl_murder(ssl, fd, throttle_message);
-#else
-     write(fd, throttle_message, strlen(throttle_message));
-     close(fd);
-#endif /* USE_SSL */
-     return;
+  if (listener->server)
+  {
+    new_client = make_client(0, STAT_UNKNOWN_SERVER);
   }
-
-  new_client = make_client(0, ((listener->server) ?
-                               STAT_UNKNOWN_SERVER : STAT_UNKNOWN_USER));
+  else
+  {
+    /*
+     * Add this local client to the IPcheck registry.
+     *
+     * If they're throttled, murder them, but tell them why first.
+     */
+    if (!IPcheck_local_connect(&addr.addr, &next_target))
+    {
+      ++ServerStats->is_ref;
+      write(fd, throttle_message, strlen(throttle_message));
+      close(fd);
+      return;
+    }
+    new_client = make_client(0, STAT_UNKNOWN_USER);
+    SetIPChecked(new_client);
+  }
 
   /*
    * Copy ascii address to 'sockhost' just in case. Then we have something
-   * valid to put into error messages...  
+   * valid to put into error messages...
    */
-  SetIPChecked(new_client);
-  ircd_ntoa_r(cli_sock_ip(new_client), (const char*) &addr.sin_addr);
+  ircd_ntoa_r(cli_sock_ip(new_client), &addr.addr);
   strcpy(cli_sockhost(new_client), cli_sock_ip(new_client));
-  (cli_ip(new_client)).s_addr = addr.sin_addr.s_addr;
-  cli_port(new_client)        = ntohs(addr.sin_port);
+  memcpy(&cli_ip(new_client), &addr.addr, sizeof(cli_ip(new_client)));
 
   if (next_target)
     cli_nexttarget(new_client) = next_target;
@@ -694,19 +533,11 @@ void add_connection(struct Listener* listener, int fd) {
   if (!socket_add(&(cli_socket(new_client)), client_sock_callback,
 		  (void*) cli_connect(new_client), SS_CONNECTED, 0, fd)) {
     ++ServerStats->is_ref;
-#ifdef USE_SSL
-    ssl_murder(ssl, fd, register_message);
-#else
     write(fd, register_message, strlen(register_message));
     close(fd);
-#endif /* USE_SSL */
     cli_fd(new_client) = -1;
     return;
   }
-#ifdef USE_SSL
-  if (ssl)
-    cli_socket(new_client).ssl = ssl;
-#endif /* USE_SSL */
   cli_freeflag(new_client) |= FREEFLAG_SOCKET;
   cli_listener(new_client) = listener;
   ++listener->ref_count;
@@ -716,11 +547,9 @@ void add_connection(struct Listener* listener, int fd) {
   start_auth(new_client);
 }
 
-/*
- * update_write
- *
- * Determines whether to tell the events engine we're interested in
- * writable events
+/** Determines whether to tell the events engine we're interested in
+ * writable events.
+ * @param cptr Client for which to decide this.
  */
 void update_write(struct Client* cptr)
 {
@@ -734,30 +563,27 @@ void update_write(struct Client* cptr)
 		 SOCK_ACTION_ADD : SOCK_ACTION_DEL) | SOCK_EVENT_WRITABLE);
 }
 
-/*
- * read_packet
- *
- * Read a 'packet' of data from a connection and process it.  Read in 8k
- * chunks to give a better performance rating (for server connections).
- * Do some tricky stuff for client connections to make sure they don't do
- * any flooding >:-) -avalon
+/** Read a 'packet' of data from a connection and process it.  Read in
+ * 8k chunks to give a better performance rating (for server
+ * connections).  Do some tricky stuff for client connections to make
+ * sure they don't do any flooding >:-) -avalon
+ * @param cptr Client from which to read data.
+ * @param socket_ready If non-zero, more data can be read from the client's socket.
+ * @return Positive number on success, zero on connection-fatal failure, negative
+ *   if user is killed.
  */
-static int
-read_packet(struct Client *cptr, int socket_ready)
+static int read_packet(struct Client *cptr, int socket_ready)
 {
   unsigned int dolen = 0;
   unsigned int length = 0;
 
   if (socket_ready &&
-      !(IsUser(cptr) && !IsOper(cptr) &&
+      !(IsUser(cptr) &&
 	DBufLength(&(cli_recvQ(cptr))) > feature_int(FEAT_CLIENT_FLOOD))) {
-#ifdef USE_SSL
-    switch (client_recv(cptr, readbuf, sizeof(readbuf), &length)) {
-#else
     switch (os_recv_nonb(cli_fd(cptr), readbuf, sizeof(readbuf), &length)) {
-#endif /* USE_SSL */
     case IO_SUCCESS:
-      if (length) {
+      if (length)
+      {
         if (!IsServer(cptr))
           cli_lasttime(cptr) = CurrentTime;
         if (cli_lasttime(cptr) > cli_since(cptr))
@@ -781,8 +607,7 @@ read_packet(struct Client *cptr, int socket_ready)
    */
   if (length > 0 && IsServer(cptr))
     return server_dopacket(cptr, readbuf, length);
-  else if (length > 0 && (IsHandshake(cptr) || IsConnecting(cptr) || 
-	(IsUser(cptr) && IsOper(cptr) && IsProtect(cptr) && IsHelper(cptr))))
+  else if (length > 0 && (IsHandshake(cptr) || IsConnecting(cptr) || (IsUser(cptr) && IsOper(cptr) && IsProtected(cptr))))
     return connect_dopacket(cptr, readbuf, length);
   else
   {
@@ -794,14 +619,11 @@ read_packet(struct Client *cptr, int socket_ready)
     if (length > 0 && dbuf_put(&(cli_recvQ(cptr)), readbuf, length) == 0)
       return exit_client(cptr, cptr, &me, "dbuf_put fail");
 
-    if (IsUser(cptr)) {
-      if (DBufLength(&(cli_recvQ(cptr))) > feature_int(FEAT_CLIENT_FLOOD)
-	&& !(IsProtect(cptr) || IsHelper(cptr)))
-      return exit_client(cptr, cptr, &me, "Trop de Flood");
-    }
+    if (DBufLength(&(cli_recvQ(cptr))) > feature_int(FEAT_CLIENT_FLOOD) && !IsProtected(cptr))
+      return exit_client(cptr, cptr, &me, "Excess Flood");
+
     while (DBufLength(&(cli_recvQ(cptr))) && !NoNewLine(cptr) &&
-           (IsTrusted(cptr) || IsOper(cptr) || 
-		cli_since(cptr) - CurrentTime < 10))
+           (IsTrusted(cptr) || cli_since(cptr) - CurrentTime < 10))
     {
       dolen = dbuf_getmsg(&(cli_recvQ(cptr)), cli_buffer(cptr), BUFSIZE);
       /*
@@ -861,79 +683,56 @@ read_packet(struct Client *cptr, int socket_ready)
   return 1;
 }
 
-/*
- * connect_server - start or complete a connection to another server
- * returns true (1) if successful, false (0) otherwise
- *
- * aconf must point to a valid C:line
- * m_connect            calls this with a valid by client and a null reply
- * try_connections      calls this with a null by client, and a null reply
- * connect_dns_callback call this with a null by client, and a valid reply
- *
- * XXX - if this comes from an m_connect message and a dns query needs to
- * be done, we loose the information about who started the connection and
- * it's considered an auto connect.
+/** Start a connection to another server.
+ * @param aconf Connect block data for target server.
+ * @param by Client who requested the connection (if any).
+ * @return Non-zero on success; zero on failure.
  */
-int connect_server(struct ConfItem* aconf, struct Client* by,
-                   struct DNSReply* reply)
+int connect_server(struct ConfItem* aconf, struct Client* by)
 {
   struct Client*   cptr = 0;
   assert(0 != aconf);
 
   if (aconf->dns_pending) {
-    sendto_opmask_butone(0, SNO_OLDSNO, "Le serveur %s connecté est en attente de DNS",
+    sendto_opmask_butone(0, SNO_OLDSNO, "Server %s connect DNS pending",
                          aconf->name);
     return 0;
   }
   Debug((DEBUG_NOTICE, "Connect to %s[@%s]", aconf->name,
-         ircd_ntoa((const char*) &aconf->ipnum)));
+         ircd_ntoa(&aconf->address.addr)));
 
   if ((cptr = FindClient(aconf->name))) {
     if (IsServer(cptr) || IsMe(cptr)) {
-      sendto_opmask_butone(0, SNO_OLDSNO, "Le serveur %s est déjà present depuis %s",
+      sendto_opmask_butone(0, SNO_OLDSNO, "Server %s already present from %s",
                            aconf->name, cli_name(cli_from(cptr)));
       if (by && IsUser(by) && !MyUser(by)) {
-        sendcmdto_one(&me, CMD_NOTICE, by, "%C :Le serveur %s est déjà present "
-                      "depuis %s", by, aconf->name, cli_name(cli_from(cptr)));
+        sendcmdto_one(&me, CMD_NOTICE, by, "%C :Server %s already present "
+                      "from %s", by, aconf->name, cli_name(cli_from(cptr)));
       }
       return 0;
     }
     else if (IsHandshake(cptr) || IsConnecting(cptr)) {
       if (by && IsUser(by)) {
-        sendcmdto_one(&me, CMD_NOTICE, by, "%C :La connexion vers %s est déjà en "
-                      "cours", by, cli_name(cptr));
+        sendcmdto_one(&me, CMD_NOTICE, by, "%C :Connection to %s already in "
+                      "progress", by, cli_name(cptr));
       }
       return 0;
     }
   }
   /*
-   * If we dont know the IP# for this host and itis a hostname and
+   * If we don't know the IP# for this host and it is a hostname and
    * not a ip# string, then try and find the appropriate host record.
    */
-  if (INADDR_NONE == aconf->ipnum.s_addr) {
+  if (!irc_in_addr_valid(&aconf->address.addr)
+      && !ircd_aton(&aconf->address.addr, aconf->host)) {
     char buf[HOSTLEN + 1];
-    assert(0 == reply);
-    if (INADDR_NONE == (aconf->ipnum.s_addr = inet_addr(aconf->host))) {
-      struct DNSQuery  query;
 
-      query.vptr     = aconf;
-      query.callback = connect_dns_callback;
-      host_from_uh(buf, aconf->host, HOSTLEN);
-      buf[HOSTLEN] = '\0';
-
-      reply = gethost_byname(buf, &query);
-
-      if (!reply) {
-        aconf->dns_pending = 1;
-        return 0;
-      }
-      memcpy(&aconf->ipnum, reply->hp->h_addr, sizeof(struct in_addr));
-    }
+    host_from_uh(buf, aconf->host, HOSTLEN);
+    gethost_byname(buf, connect_dns_callback, aconf);
+    aconf->dns_pending = 1;
+    return 0;
   }
   cptr = make_client(NULL, STAT_UNKNOWN_SERVER);
-  if (reply)
-    ++reply->ref_count;
-  cli_dns_reply(cptr) = reply;
 
   /*
    * Copy these in so we have something for error detection.
@@ -948,11 +747,11 @@ int connect_server(struct ConfItem* aconf, struct Client* by,
   attach_confs_byhost(cptr, aconf->host, CONF_SERVER);
 
   if (!find_conf_byhost(cli_confs(cptr), aconf->host, CONF_SERVER)) {
-    sendto_opmask_butone(0, SNO_OLDSNO, "Cet Host %s n'est pas configuré pour se "
-                         "connecter: pas de C-line", aconf->name);
+    sendto_opmask_butone(0, SNO_OLDSNO, "Host %s is not enabled for "
+                         "connecting: no Connect block", aconf->name);
     if (by && IsUser(by) && !MyUser(by)) {
-      sendcmdto_one(&me, CMD_NOTICE, by, "%C :Connexion au host %s impossible: pas de "
-                    "C-line", by, aconf->name);
+      sendcmdto_one(&me, CMD_NOTICE, by, "%C :Connect to host %s failed: no "
+                    "Connect block", by, aconf->name);
     }
     det_confs_butmask(cptr, 0);
     free_client(cptr);
@@ -963,7 +762,7 @@ int connect_server(struct ConfItem* aconf, struct Client* by,
    */
   if (!connect_inet(aconf, cptr)) {
     if (by && IsUser(by) && !MyUser(by)) {
-      sendcmdto_one(&me, CMD_NOTICE, by, "%C :Impossible de se connecter vers %s", by,
+      sendcmdto_one(&me, CMD_NOTICE, by, "%C :Couldn't connect to %s", by,
                     cli_name(cptr));
     }
     det_confs_butmask(cptr, 0);
@@ -995,7 +794,6 @@ int connect_server(struct ConfItem* aconf, struct Client* by,
   if (cli_fd(cptr) > HighestFd)
     HighestFd = cli_fd(cptr);
 
-  
   LocalClientArray[cli_fd(cptr)] = cptr;
 
   Count_newunknown(UserStats);
@@ -1011,18 +809,7 @@ int connect_server(struct ConfItem* aconf, struct Client* by,
     completed_connection(cptr) : 1;
 }
 
-/*
- * Setup local socket structure to use for binding to.
- */
-void set_virtual_host(struct in_addr addr)
-{
-  memset(&VirtualHost, 0, sizeof(VirtualHost));
-  VirtualHost.sin_family = AF_INET;
-  VirtualHost.sin_addr.s_addr = addr.s_addr;
-}  
-
-/*
- * Find the real hostname for the host running the server (or one which
+/** Find the real hostname for the host running the server (or one which
  * matches the server's name) and its primary IP#.  Hostname is stored
  * in the client structure passed as a pointer.
  */
@@ -1035,8 +822,9 @@ void init_server_identity(void)
   SetYXXServerName(&me, conf->numeric);
 }
 
-/*
- * Process events on a client socket
+/** Process events on a client socket.
+ * @param ev Socket event structure that has a struct Connection as
+ *   its associated data.
  */
 static void client_sock_callback(struct Event* ev)
 {
@@ -1048,7 +836,7 @@ static void client_sock_callback(struct Event* ev)
   assert(0 != ev_socket(ev));
   assert(0 != s_data(ev_socket(ev)));
 
-  con = s_data(ev_socket(ev));
+  con = (struct Connection*) s_data(ev_socket(ev));
 
   assert(0 != con_client(con) || ev_type(ev) == ET_DESTROY);
 
@@ -1062,9 +850,6 @@ static void client_sock_callback(struct Event* ev)
 
     if (!con_freeflag(con) && !cptr)
       free_connection(con);
-#ifdef USE_SSL
-    ssl_free(ev_socket(ev));
-#endif /* USE_SSL */
     break;
 
   case ET_CONNECT: /* socket connection completed */
@@ -1077,6 +862,11 @@ static void client_sock_callback(struct Event* ev)
     cli_error(cptr) = ev_data(ev);
     if (s_state(&(con_socket(con))) == SS_CONNECTING) {
       completed_connection(cptr);
+      /* for some reason, the os_get_sockerr() in completed_connect()
+       * can return 0 even when ev_data(ev) indicates a real error, so
+       * re-assign the client error here.
+       */
+      cli_error(cptr) = ev_data(ev);
       break;
     }
     /*FALLTHROUGH*/
@@ -1085,7 +875,7 @@ static void client_sock_callback(struct Event* ev)
 	   cli_error(cptr)));
     SetFlag(cptr, FLAG_DEADSOCKET);
     if ((IsServer(cptr) || IsHandshake(cptr)) && cli_error(cptr) == 0) {
-      exit_client_msg(cptr, cptr, &me, "Le serveur %s ferme la connexion (%s)",
+      exit_client_msg(cptr, cptr, &me, "Server %s closed the connection (%s)",
 		      cli_name(cptr), cli_serv(cptr)->last_error_msg);
       return;
     } else {
@@ -1097,7 +887,7 @@ static void client_sock_callback(struct Event* ev)
   case ET_WRITE: /* socket is writable */
     ClrFlag(cptr, FLAG_BLOCKED);
     if (cli_listing(cptr) && MsgQLength(&(cli_sendQ(cptr))) < 2048)
-      list_next_channels(cptr, 64);
+      list_next_channels(cptr);
     Debug((DEBUG_SEND, "Sending queued data to %C", cptr));
     send_queued(cptr);
     break;
@@ -1106,14 +896,12 @@ static void client_sock_callback(struct Event* ev)
     if (!IsDead(cptr)) {
       Debug((DEBUG_DEBUG, "Reading data from %C", cptr));
       if (read_packet(cptr, 1) == 0) /* error while reading packet */
-	fallback = "Fermeture par le client";
+	fallback = "EOF from client";
     }
     break;
 
   default:
-#ifndef NDEBUG
-    abort(); /* unrecognized event */
-#endif
+    assert(0 && "Unrecognized socket event in client_sock_callback()");
     break;
   }
 
@@ -1122,13 +910,14 @@ static void client_sock_callback(struct Event* ev)
   if (fallback) {
     const char* msg = (cli_error(cptr)) ? strerror(cli_error(cptr)) : fallback;
     if (!msg)
-      msg = "Erreur inconnue";
+      msg = "Unknown error";
     exit_client_msg(cptr, cptr, &me, fmt, msg);
   }
 }
 
-/*
- * Process a timer on client socket
+/** Process a timer on client socket.
+ * @param ev Timer event that has a struct Connection as its
+ * associated data.
  */
 static void client_timer_callback(struct Event* ev)
 {
@@ -1139,7 +928,7 @@ static void client_timer_callback(struct Event* ev)
   assert(0 != t_data(ev_timer(ev)));
   assert(ET_DESTROY == ev_type(ev) || ET_EXPIRE == ev_type(ev));
 
-  con = t_data(ev_timer(ev));
+  con = (struct Connection*) t_data(ev_timer(ev));
 
   assert(0 != con_client(con) || ev_type(ev) == ET_DESTROY);
 

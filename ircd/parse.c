@@ -16,10 +16,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: parse.c,v 1.32 2006/01/28 16:00:43 bugs Exp $
  */
-#include "../config.h"
+/** @file
+ * @brief Parse input from IRC clients and other servers.
+ * @version $Id: parse.c,v 1.5 2005/10/09 18:55:10 progs Exp $
+ */
+#include "config.h"
 
 #include "parse.h"
 #include "client.h"
@@ -30,6 +32,7 @@
 #include "ircd_alloc.h"
 #include "ircd_chattr.h"
 #include "ircd_features.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "msg.h"
@@ -45,27 +48,62 @@
 #include "s_numeric.h"
 #include "s_user.h"
 #include "send.h"
-#include "ircd_struct.h"
+#include "struct.h"
 #include "sys.h"
-#include "shun.h"
-#include "whocmds.h"
 #include "whowas.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <string.h>
 #include <stdlib.h>
 
-#define MAXPTRLEN	32
+/*
+ * Message Tree stuff mostly written by orabidoo, with changes by Dianora.
+ * Adapted to Undernet, adding token support, etc by comstud 10/06/97
+ *
+ * completely rewritten June 2, 2003 - Dianora
+ *
+ * This has always just been a trie. Look at volume III of Knuth ACP
+ *
+ *
+ * ok, you start out with an array of pointers, each one corresponds
+ * to a letter at the current position in the command being examined.
+ *
+ * so roughly you have this for matching 'trie' or 'tie'
+ *
+ * 't' points -> [MessageTree *] 'r' -> [MessageTree *] -> 'i'
+ *   -> [MessageTree *] -> [MessageTree *] -> 'e' and matches
+ *
+ *				 'i' -> [MessageTree *] -> 'e' and matches
+ */
 
+/** Number of children under a trie node. */
+#define MAXPTRLEN	32	/* Must be a power of 2, and
+				 * larger than 26 [a-z]|[A-Z]
+				 * its used to allocate the set
+				 * of pointers at each node of the tree
+				 * There are MAXPTRLEN pointers at each node.
+				 * Obviously, there have to be more pointers
+				 * Than ASCII letters. 32 is a nice number
+				 * since there is then no need to shift
+				 * 'A'/'a' to base 0 index, at the expense
+				 * of a few never used pointers. For a small
+				 * parser like this, this is a good compromise
+				 * and does make it somewhat faster.
+				 *
+				 * - Dianora
+				 */
+
+/** Node in the command lookup trie. */
 struct MessageTree {
-  struct Message *msg;
-  struct MessageTree *pointers[MAXPTRLEN];
+  struct Message *msg; /**< Message (if any) if the string ends now. */
+  struct MessageTree *pointers[MAXPTRLEN]; /**< Child nodes for each letter. */
 };
 
 /** Root of command lookup trie. */
 static struct MessageTree msg_tree;
 static struct MessageTree tok_tree;
 
+/** Array of all supported commands. */
 struct Message msgtab[] = {
   {
     MSG_PRIVATE,
@@ -282,7 +320,7 @@ struct Message msgtab[] = {
     TOK_WHO,
     0, MAXPARA, MFLG_SLOW, 0, NULL,
     /* UNREG, CLIENT, SERVER, OPER, SERVICE */
-    { m_unregistered, m_who, m_who, m_who, m_ignore }
+    { m_unregistered, m_who, m_ignore, m_who, m_ignore }
   },
   {
     MSG_WHOWAS,
@@ -317,7 +355,7 @@ struct Message msgtab[] = {
     TOK_USERIP,
     0, 1, MFLG_SLOW, 0, NULL,
     /* UNREG, CLIENT, SERVER, OPER, SERVICE */
-    { m_unregistered, m_not_oper, m_ignore, m_userip, m_ignore }
+    { m_unregistered, m_userip, m_ignore, m_userip, m_ignore }
   },
   {
     MSG_TRACE,
@@ -413,7 +451,7 @@ struct Message msgtab[] = {
   {
     MSG_ADMIN,
     TOK_ADMIN,
-    0, MAXPARA, MFLG_SLOW | MFLG_UNREG, 0, NULL,
+    0, MAXPARA, MFLG_SLOW | MFLG_UNREG, 0,  NULL,
     /* UNREG, CLIENT, SERVER, OPER, SERVICE */
     { m_admin, m_admin, ms_admin, mo_admin, m_ignore }
   },
@@ -429,7 +467,7 @@ struct Message msgtab[] = {
     TOK_INFO,
     0, MAXPARA, MFLG_SLOW, 0, NULL,
     /* UNREG, CLIENT, SERVER, OPER, SERVICE */
-    { m_unregistered, m_info, ms_info, m_info, m_ignore }
+    { m_unregistered, m_info, ms_info, mo_info, m_ignore }
   },
   {
     MSG_MOTD,
@@ -455,23 +493,16 @@ struct Message msgtab[] = {
   {
     MSG_GLINE,
     TOK_GLINE,
-    0, MAXPARA, 0, 0, NULL,
+    0, MAXPARA,         0, 0, NULL,
     /* UNREG, CLIENT, SERVER, OPER, SERVICE */
     { m_unregistered, m_gline, ms_gline, mo_gline, m_ignore }
   },
-  {
-    MSG_SHUN, 
-    TOK_SHUN, 
-    0, MAXPARA, 0, 0, NULL,
-    /* UNREG, CLIENT, SERVER, OPER, SERVICE */ 
-    { m_unregistered, m_shun, ms_shun, mo_shun, m_ignore } 
-  }, 
   {
     MSG_JUPE,
     TOK_JUPE,
     0, MAXPARA, MFLG_SLOW, 0, NULL,
     /* UNREG, CLIENT, SERVER, OPER, SERVICE */
-    { m_unregistered, m_jupe, ms_jupe, mo_jupe, m_ignore }
+    { m_unregistered, m_not_oper, ms_jupe, mo_jupe, m_ignore }
   },
   {
     MSG_OPMODE,
@@ -504,7 +535,7 @@ struct Message msgtab[] = {
   {
     MSG_END_OF_BURST_ACK,
     TOK_END_OF_BURST_ACK,
-    0, MAXPARA, 1, 0, NULL,
+    0, MAXPARA, MFLG_SLOW, 0, NULL,
     /* UNREG, CLIENT, SERVER, OPER, SERVICE */
     { m_ignore, m_ignore, ms_end_of_burst_ack, m_ignore, m_ignore }
   },
@@ -514,13 +545,6 @@ struct Message msgtab[] = {
     0, MAXPARA, MFLG_SLOW, 0, NULL,
     /* UNREG, CLIENT, SERVER, OPER, SERVICE */
     { m_unregistered, m_hash, m_hash, m_hash, m_ignore }
-  },
-  {
-    MSG_DNS,
-    TOK_DNS,
-    0, MAXPARA, MFLG_SLOW, 0, NULL,
-    /* UNREG, CLIENT, SERVER, OPER, SERVICE */
-    { m_unregistered, m_dns, m_dns, m_dns, m_ignore }
   },
   {
     MSG_REHASH,
@@ -576,7 +600,7 @@ struct Message msgtab[] = {
     TOK_PRIVS,
     0, MAXPARA, MFLG_SLOW, 0, NULL,
     /* UNREG, CLIENT, SERVER, OPER, SERVICE */
-    { m_unregistered, m_not_oper, m_ignore, mo_privs, m_ignore }
+    { m_unregistered, m_not_oper, ms_privs, mo_privs, m_ignore }
   },
   {
     MSG_ACCOUNT,
@@ -591,112 +615,51 @@ struct Message msgtab[] = {
     0, MAXPARA, MFLG_SLOW, 0, NULL,
     /* UNREG, CLIENT, SERVER, OPER, SERVICE */
     { m_ignore, m_not_oper, ms_asll, mo_asll, m_ignore }
-  },
-  {
+   },
+   {
     MSG_SVSNICK,
     TOK_SVSNICK,
     0, MAXPARA, MFLG_SLOW, 0, NULL,
     /* UNREG, CLIENT, SERVER, OPER, SERVICE */
-    { m_unregistered, m_not_oper, ms_svsnick, m_ignore, ms_svsnick }
-  },
-  {
-    MSG_SANICK,
-    TOK_SANICK,
-    0, MAXPARA, MFLG_SLOW, 0, NULL,
-    /* UNREG, CLIENT, SERVER, OPER, SERVICE */
-    { m_unregistered, m_not_oper, m_ignore, mo_sanick, m_ignore }
-  },
-  {
+    { m_ignore, m_ignore, ms_svsnick, m_ignore, ms_svsnick }
+   },
+   {
     MSG_SVSMODE,
     TOK_SVSMODE,
     0, MAXPARA, MFLG_SLOW, 0, NULL,
     /* UNREG, CLIENT, SERVER, OPER, SERVICE */
-    { m_unregistered, m_not_oper, ms_svsmode, m_ignore, ms_svsmode }
-  },
-  {
-    MSG_SAMODE,
-    TOK_SAMODE,
-    0, MAXPARA, MFLG_SLOW, 0, NULL,
-    /* UNREG, CLIENT, SERVER, OPER, SERVICE */
-    { m_unregistered, m_not_oper, m_ignore, mo_samode, m_ignore }
-  },
-  {
-    MSG_SVSJOIN,
-    TOK_SVSJOIN,
-    0, MAXPARA, MFLG_SLOW | MFLG_UNREG, 0, NULL,
-    /* UNREG, CLIENT, SERVER, OPER, SERVICE */
-    { m_unregistered, m_not_oper, ms_svsjoin, m_ignore, ms_svsjoin }
-  },
-  {
-    MSG_SAJOIN,
-    TOK_SAJOIN,
-    0, MAXPARA, MFLG_SLOW | MFLG_UNREG, 0, NULL,
-    /* UNREG, CLIENT, SERVER, OPER, SERVICE */
-    { m_unregistered, m_not_oper, m_ignore, mo_sajoin, m_ignore }
-  },
-  {
-    MSG_SVSPART,
-    TOK_SVSPART,
-    0, MAXPARA, MFLG_SLOW | MFLG_UNREG, 0, NULL,
-    /* UNREG, CLIENT, SERVER, OPER, SERVICE */
-    { m_unregistered, m_not_oper, ms_svspart, m_ignore, ms_svspart }
-  },
-  {
-    MSG_SAPART,
-    TOK_SAPART,
-    0, MAXPARA, MFLG_SLOW | MFLG_UNREG, 0, NULL,
-    /* UNREG, CLIENT, SERVER, OPER, SERVICE */
-    { m_unregistered, m_not_oper, m_ignore, mo_sapart, m_ignore }
-  },
-  {
-    MSG_SVSHOST,
-    TOK_SVSHOST,
-    0, MAXPARA, MFLG_SLOW, 0, NULL,
-    /* UNREG, CLIENT, SERVER, OPER, SERVICE */
-    { m_unregistered, m_not_oper, ms_svshost, m_ignore, ms_svshost }
-  },
-  {
-    MSG_SAHOST,
-    TOK_SAHOST,
-    0, MAXPARA, MFLG_SLOW, 0, NULL,
-    /* UNREG, CLIENT, SERVER, OPER, SERVICE */
-    { m_unregistered, m_not_oper, m_ignore, mo_sahost, m_ignore }
-  },
-  {
-    MSG_OPERMOTD,
-    TOK_OPERMOTD,
-    0, MAXPARA, MFLG_SLOW, 0, NULL,
-    /* UNREG, CLIENT, SERVER, OPER, SERVICE */
-    { m_unregistered, m_not_oper, ms_opermotd, m_opermotd, m_ignore }
-  },
-  {
-    MSG_MKPASSWD,
-    TOK_MKPASSWD,
-    0, MAXPARA, MFLG_SLOW, 0, NULL,
-    /* UNREG, CLIENT, SERVER, OPER, SERVICE */
-    { m_ignore, m_mkpasswd, m_ignore, m_mkpasswd, m_ignore }
-  },
-  {
+    { m_ignore, m_ignore, ms_svsmode, m_ignore, ms_svsmode }
+   },
+   {
     MSG_SNO,
     TOK_SNO,
     0, MAXPARA, MFLG_SLOW, 0, NULL,
     /* UNREG, CLIENT, SERVER, OPER, SERVICE */
     { m_ignore, m_ignore, ms_sno, m_ignore, ms_sno }
-  },
-  {
-    MSG_RULES,
-    TOK_RULES,
+   },
+   {
+    MSG_CHECK,
+    TOK_CHECK,
     0, MAXPARA, MFLG_SLOW, 0, NULL,
     /* UNREG, CLIENT, SERVER, OPER, SERVICE */
-    { m_unregistered, m_rules, ms_rules, m_rules, m_ignore }
-  },
-  {
-    MSG_SWHOIS,
-    TOK_SWHOIS,
+    { m_unregistered, m_not_oper, m_check, m_check, m_ignore }
+   },
+   {
+    MSG_SETHOST,
+    TOK_SETHOST,
     0, MAXPARA, MFLG_SLOW, 0, NULL,
     /* UNREG, CLIENT, SERVER, OPER, SERVICE */
-    { m_unregistered, m_ignore, ms_swhois, m_ignore, m_ignore }
+    { m_unregistered, m_sethost, m_ignore, m_sethost, m_ignore }
+   },
+#if WE_HAVE_A_REAL_CAPABILITY_NOW
+  {
+    MSG_CAP,
+    TOK_CAP,
+    0, MAXPARA, 0, 0, NULL,
+    /* UNREG, CLIENT, SERVER, OPER, SERVICE */
+    { m_cap, m_cap, m_ignore, m_cap, m_ignore }
   },
+#endif
   /* This command is an alias for QUIT during the unregistered part of
    * of the server.  This is because someone jumping via a broken web
    * proxy will send a 'POST' as their first command - which we will
@@ -713,8 +676,15 @@ struct Message msgtab[] = {
   { 0 }
 };
 
+/** Array of command parameters. */
 static char *para[MAXPARA + 2]; /* leave room for prefix and null */
 
+
+/** Add a message to the lookup trie.
+ * @param[in,out] mtree_p Trie node to insert under.
+ * @param[in] msg_p Message to insert.
+ * @param[in] cmd Text of command to insert.
+ */
 void
 add_msg_element(struct MessageTree *mtree_p, struct Message *msg_p, char *cmd)
 {
@@ -818,6 +788,8 @@ int register_mapping(struct s_map *map)
   msg->count = 0;
   msg->parameters = 2;
   msg->flags = MFLG_EXTRA;
+  if (!(map->flags & SMAP_FAST))
+    msg->flags |= MFLG_SLOW;
   msg->bytes = 0;
   msg->extra = map;
 
@@ -848,7 +820,10 @@ int unregister_mapping(struct s_map *map)
 
   del_msg_element(&msg_tree, map->msg->cmd);
 
+  map->msg->extra = NULL;
   MyFree(map->msg);
+  map->msg = NULL;
+
   return 1;
 }
 
@@ -865,7 +840,6 @@ int
 parse_client(struct Client *cptr, char *buffer, char *bufend)
 {
   struct Client*  from = cptr;
-  struct Shun*    ashun = NULL;
   char*           ch;
   char*           s;
   int             i;
@@ -900,31 +874,6 @@ parse_client(struct Client *cptr, char *buffer, char *bufend)
 
   if ((s = strchr(ch, ' ')))
     *s++ = '\0';
-
-  expire_shuns();
-  if ((strcasecmp(ch, "NICK"))    &&  /* rejection handled in m_nick.c */
-      (strcasecmp(ch, "SERVER"))  &&  /* expiring shuns with this or matching
-                                       * just causes major issues, we dont need
-                                       * to check shuns with SERVER.
-                                       */
-      (strcasecmp(ch, "USER"))    &&  /* avoid issues, doesnt matter if we
-                                            prase while shunned */
-      (strcasecmp(ch, "PASS"))    &&  /* LOC */
-      (strcasecmp(ch, "ADMIN"))   &&  /* get admin info for help*/
-      (strcasecmp(ch, "JOIN"))    &&  /* autorise les joins */
-      (strcasecmp(ch, "PART"))    &&  /* obvious */
-      (strcasecmp(ch, "QUIT"))    &&  /* obvious */
-      (strcasecmp(ch, "PONG"))    &&  /* survive */
-      (strcasecmp(ch, "HELP"))    &&  /* desoin d'aide ? */
-      (strcasecmp(ch, "OPER"))    &&  /* oper */
-      (strcasecmp(ch, "SHUN"))        /* shun */
-    ) {
-    if ((ashun = shun_lookup(cptr, 0)) && !IsAnAdmin(cptr)) {
-	sendcmdto_one(&me, CMD_NOTICE, cptr, "%C :Vous êtes maintenant spectateur, la commande %s est ignorée", cptr, ch);
-	sendcmdto_one(&me, CMD_NOTICE, cptr, "%C :Raison : %s", cptr, ashun->sh_reason);
-	return 0;
-    }
-  }
 
   if ((mptr = msg_tree_parse(ch, &msg_tree)) == NULL)
   {

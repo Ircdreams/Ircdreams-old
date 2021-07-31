@@ -18,8 +18,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: s_stats.h,v 1.1.1.1 2004/02/28 11:11:13 bugs Exp $
+ */
+/** @file
+ * @brief Report configuration lines and other statistics from this server.
+ * @version $Id: s_stats.h,v 1.2 2005/10/15 10:00:12 progs Exp $
  */
 
 #ifndef INCLUDED_s_stats_h
@@ -32,26 +34,32 @@ struct Client;
 
 struct StatDesc;
 
-/* Source of /stats, stats descriptor, stats char, extra param (might be 0) */
-typedef void (*StatFunc)(struct Client *, struct StatDesc *, int, char *);
+/** Statistics callback function.
+ * @param[in] cptr Client requesting statistics.
+ * @param[in] sd Stats descriptor for request.
+ * @param[in] param Extra parameter from user (may be NULL).
+ */
+typedef void (*StatFunc)(struct Client *cptr, const struct StatDesc *sd, char *param);
 
-struct StatDesc {
-  char		sd_c;		/* stats character */
-  unsigned int	sd_flags;	/* flags to control the stats */
-  enum Feature	sd_control;	/* feature controlling stats */
-  StatFunc	sd_func;	/* function to dispatch to */
-  int		sd_funcdata;	/* extra data for the function */
-  char	       *sd_desc;	/* descriptive text */
+/** Statistics entry. */
+struct StatDesc
+{
+  char         sd_c;           /**< stats character (or '\\0') */
+  char        *sd_name;        /**< full name for stats */
+  unsigned int sd_flags;       /**< flags to control the stats */
+  enum Feature sd_control;     /**< feature controlling stats */
+  StatFunc     sd_func;        /**< function to dispatch to */
+  int          sd_funcdata;    /**< extra data for the function */
+  char        *sd_desc;        /**< descriptive text */
 };
 
-#define STAT_FLAG_OPERONLY	0x01	/* Oper-only stat */
-#define STAT_FLAG_OPERFEAT	0x02	/* Oper-only if the feature is true */
-#define STAT_FLAG_CASESENS	0x04	/* Flag is case-sensitive */
-#define STAT_FLAG_VARPARAM	0x08	/* may have an extra parameter */
-
-extern struct StatDesc statsinfo[];
-extern struct StatDesc *statsmap[];
+#define STAT_FLAG_OPERONLY 0x01    /**< Oper-only stat */
+#define STAT_FLAG_OPERFEAT 0x02    /**< Oper-only if the feature is true */
+#define STAT_FLAG_LOCONLY  0x04    /**< Local user only */
+#define STAT_FLAG_CASESENS 0x08    /**< Flag is case-sensitive */
+#define STAT_FLAG_VARPARAM 0x10    /**< May have an extra parameter */
 
 extern void stats_init(void);
+const struct StatDesc *stats_find(const char *name_or_char);
 
 #endif /* INCLUDED_s_stats_h */

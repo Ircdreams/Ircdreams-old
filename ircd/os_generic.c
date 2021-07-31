@@ -15,37 +15,53 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: os_generic.c,v 1.3 2005/01/24 01:19:23 bugs Exp $
- *
  */
-#include "../config.h"
+/** @file
+ * @brief Implementation of OS-dependent operations.
+ * @version $Id: os_generic.c,v 1.1.1.1 2005/10/01 17:28:24 progs Exp $
+ */
+#include "config.h"
 
-#define _XOPEN_SOURCE	/* make limits.h #define IOV_MAX */
+#define _XOPEN_SOURCE	600 /**< make limits.h #define IOV_MAX */
+#define __EXTENSIONS__  1   /**< make Solaris netinet/in.h know IPv6 */
 
 #include "ircd_osdep.h"
 #include "msgq.h"
+#include "ircd_log.h"
+#include "res.h"
+#include "s_bsd.h"
+#include "sys.h"
 
-#include <assert.h>
+/* Include file dependency notes:
+ * FreeBSD requires struct timeval from sys/time.h before struct
+ * rusage in sys/resource.h.
+ * Solaris requires sys/time.h before struct rusage (indirectly) in
+ * netinet/in.h.
+ */
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <netinet/in.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
+#include <sys/time.h>
+#include <netinet/in.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
-#include <sys/time.h>
 #include <sys/uio.h>
 
-#if 0
+#if HAVE_SYS_PARAM_H
+#include <sys/param.h>
+#endif
+
+#if HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 
 #ifndef IOV_MAX
-#define IOV_MAX 16	/* minimum required */
+#define IOV_MAX 16	/**< minimum required length of an iovec array */
 #endif
 
 #ifdef HPUX
@@ -53,17 +69,116 @@
 #define getrusage(a,b) syscall(SYS_GETRUSAGE, a, b)
 #endif
 
+
+static void sockaddr_in_to_irc(const struct sockaddr_in *v4,
+                               struct irc_sockaddr *irc)
+{
+    memset(&irc->addr, 0, 5*sizeof(int16_t));
+    irc->addr.in6_16[5] = 0xffff;
+    memcpy(&irc->addr.in6_16[6], &v4->sin_addr, sizeof(v4->sin_addr));
+    irc->port = ntohs(v4->sin_port);
+}
+
+
+#ifdef IPV6
+/** Native socket address type. */
+#define sockaddr_native sockaddr_in6
+/** Field name inside sockaddr_native to find address family. */
+#define sn_family sin6_family
+
+/** Convert native socket address to IRC format.
+ * @param[in] v6 Native socket address.
+ * @param[out] irc IRC format socket address.
+ */
+void sockaddr_to_irc(const struct sockaddr_in6 *v6, struct irc_sockaddr *irc)
+{
+    if (v6->sin6_family == AF_INET6) {
+        memcpy(&irc->addr.in6_16[0], &v6->sin6_addr, sizeof(v6->sin6_addr));
+        irc->port = ntohs(v6->sin6_port);
+    }
+    else if (v6->sin6_family == AF_INET) {
+        sockaddr_in_to_irc((struct sockaddr_in *)v6, irc);
+    }
+    else assert(0 && "Unhandled native address family");
+}
+
+/** Convert IRC socket address to native format.
+ * @param[out] v6 Native socket address.
+ * @param[in] irc IRC socket address.
+ * @param[in] compat_fd If non-negative, an FD specifying address family.
+ * @return Length of address written to \a v6.
+ */
+int sockaddr_from_irc(struct sockaddr_in6 *v6, const struct irc_sockaddr *irc, int compat_fd)
+{
+    struct sockaddr_in6 sin6;
+    socklen_t slen;
+    int family;
+
+    assert(irc != 0);
+    slen = sizeof(sin6);
+    if ((0 <= compat_fd)
+        && (0 == getsockname(compat_fd, (struct sockaddr*)&sin6, &slen)))
+        family = sin6.sin6_family;
+    else if ((irc == &VirtualHost_v4) || irc_in_addr_is_ipv4(&irc->addr))
+        family = AF_INET;
+    else
+        family = AF_INET6;
+
+    memset(v6, 0, sizeof(*v6));
+    if (family == AF_INET) {
+        struct sockaddr_in *v4 = (struct sockaddr_in*)v6;
+        v4->sin_family = AF_INET;
+        memcpy(&v4->sin_addr, &irc->addr.in6_16[6], sizeof(v4->sin_addr));
+        v4->sin_port = htons(irc->port);
+        return sizeof(*v4);
+    }
+    else {
+        v6->sin6_family = AF_INET6;
+        memcpy(&v6->sin6_addr, &irc->addr.in6_16[0], sizeof(v6->sin6_addr));
+        v6->sin6_port = htons(irc->port);
+        return sizeof(*v6);
+    }
+}
+
+#else
+#define sockaddr_native sockaddr_in
+#define sn_family sin_family
+#define sockaddr_to_irc sockaddr_in_to_irc
+
+int sockaddr_from_irc(struct sockaddr_in *v4, const struct irc_sockaddr *irc, int compat_fd)
+{
+    assert(irc != 0);
+    v4->sin_family = AF_INET;
+    if (irc) {
+        assert(!irc->addr.in6_16[0] && !irc->addr.in6_16[1] && !irc->addr.in6_16[2] && !irc->addr.in6_16[3] && !irc->addr.in6_16[4] && (!irc->addr.in6_16[5] || irc->addr.in6_16[5] == 0xffff));
+        memcpy(&v4->sin_addr, &irc->addr.in6_16[6], sizeof(v4->sin_addr));
+        v4->sin_port = htons(irc->port);
+    } else{
+        memset(&v4, 0, sizeof(v4));
+    }
+    (void)compat_fd;
+    return sizeof(*v4);
+}
+
+#endif
+
 /*
- * This is part of the STATS replies. There is no offical numeric for this
- * since this isnt an official command, in much the same way as HASH isnt.
+ * This is part of the STATS replies. There is no official numeric for this
+ * since this isn't an official command, in much the same way as HASH isn't.
  * It is also possible that some systems wont support this call or have
  * different field names for "struct rusage".
  * -avalon
  */
+/** Send resource usage information to a client.
+ * @param[in] cptr Client requesting information.
+ * @param[in] uptime Wall time in seconds since the server started.
+ * @param[in] enumerator Function to call to send a line to \a cptr.
+ * @return Zero if some usage reports could not be sent, non-zero on success.
+ */
 int os_get_rusage(struct Client *cptr, int uptime, EnumFn enumerator)
 {
-  char buf[256];
 #ifdef HAVE_GETRUSAGE
+  char buf[256];
   struct rusage rus;
   time_t secs;
 
@@ -89,7 +204,7 @@ int os_get_rusage(struct Client *cptr, int uptime, EnumFn enumerator)
     secs = 1;
 
   sprintf(buf, "CPU Secs %ld:%ld User %ld:%ld System %ld:%ld",
-          secs / 60, secs % 60,
+          (long)(secs / 60), (long)(secs % 60),
           rus.ru_utime.tv_sec / 60, rus.ru_utime.tv_sec % 60,
           rus.ru_stime.tv_sec / 60, rus.ru_stime.tv_sec % 60);
   (*enumerator)(cptr, buf);
@@ -106,7 +221,7 @@ int os_get_rusage(struct Client *cptr, int uptime, EnumFn enumerator)
 
   sprintf(buf, "Block in %ld out %ld", rus.ru_inblock, rus.ru_oublock);
   (*enumerator)(cptr, buf);
-  
+
   sprintf(buf, "Msg Rcv %ld Send %ld", rus.ru_msgrcv, rus.ru_msgsnd);
   (*enumerator)(cptr, buf);
 
@@ -116,6 +231,7 @@ int os_get_rusage(struct Client *cptr, int uptime, EnumFn enumerator)
 
 #else /* HAVE_GETRUSAGE */
 #if HAVE_TIMES
+  char buf[256];
   struct tms tmsbuf;
   time_t secs, mins;
   int hzz = 1, ticpermin;
@@ -147,6 +263,10 @@ int os_get_rusage(struct Client *cptr, int uptime, EnumFn enumerator)
   return 1;
 }
 
+/** Look up the most recent socket error for a socket file descriptor.
+ * @param[in] fd File descriptor to check.
+ * @return Error code from the socket, or 0 if the OS does not support this.
+ */
 int os_get_sockerr(int fd)
 {
   int    err = 0;
@@ -157,14 +277,9 @@ int os_get_sockerr(int fd)
   return err;
 }
 
-/*
- * set_non_blocking
- *
- * Set the client connection into non-blocking mode. If your
- * system doesn't support this, you can make this a dummy
- * function (and get all the old problems that plagued the
- * blocking version of IRC--not a problem if you are a
- * lightly loaded node...)
+/** Set a file descriptor to non-blocking mode.
+ * @param[in] fd %Socket file descriptor.
+ * @return Non-zero on success, or zero on failure.
  */
 int os_set_nonblocking(int fd)
 {
@@ -200,27 +315,38 @@ int os_set_nonblocking(int fd)
   return 1;
 }
 
-
-/*
- *  set_sock_opts
+/** Mark a socket's address as reusable.
+ * @param[in] fd %Socket file descriptor to manipulate.
+ * @return Non-zero on success, or zero on failure.
  */
 int os_set_reuseaddr(int fd)
 {
   unsigned int opt = 1;
-  return (0 == setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, 
+  return (0 == setsockopt(fd, SOL_SOCKET, SO_REUSEADDR,
                           (const char*) &opt, sizeof(opt)));
 }
 
-int os_set_sockbufs(int fd, unsigned int ssize,unsigned int rsize)
+/** Set a socket's send and receive buffer sizes.
+ * @param[in] fd %Socket file descriptor to manipulate.
+ * @param[in] ssize New send buffer size.
+ * @param[in] rsize New receive buffer size.
+ * @return Non-zero on success, or zero on failure.
+ */
+int os_set_sockbufs(int fd, unsigned int ssize, unsigned int rsize)
 {
   unsigned int sopt = ssize;
   unsigned int ropt = rsize;
-  return ((0 == ropt || 0 == setsockopt(fd, SOL_SOCKET, SO_RCVBUF,
-		(const char*) &ropt, sizeof ropt)) &&
-	(0 == sopt || 0 == setsockopt(fd, SOL_SOCKET, SO_SNDBUF,
-		(const char*) &sopt, sizeof sopt)));
+  return (0 == setsockopt(fd, SOL_SOCKET, SO_RCVBUF,
+                          (const char*) &ropt, sizeof(ropt)) &&
+          0 == setsockopt(fd, SOL_SOCKET, SO_SNDBUF,
+                          (const char*) &sopt, sizeof(sopt)));
 }
 
+/** Set a socket's "type of service" value.
+ * @param[in] fd %Socket file descriptor to manipulate.
+ * @param[in] tos New type of service value to use.
+ * @return Non-zero on success, or zero on failure.
+ */
 int os_set_tos(int fd,int tos)
 {
 #if defined(IP_TOS) && defined(IPPROTO_IP)
@@ -231,6 +357,10 @@ int os_set_tos(int fd,int tos)
 #endif
 }
 
+/** Disable IP options on a socket.
+ * @param[in] fd %Socket file descriptor to manipulate.
+ * @return Non-zero on success, or zero on failure.
+ */
 int os_disable_options(int fd)
 {
 #if defined(IP_OPTIONS) && defined(IPPROTO_IP)
@@ -258,13 +388,18 @@ int os_disable_options(int fd)
 #endif
 #endif
 
+/** Set file descriptor limit for the process.
+ * @param[in] max_descriptors Ideal number of file descriptors.
+ * @return Zero on success; -1 on error; positive number of possible
+ * file descriptors if \a max_descriptors is too high.
+ */
 int os_set_fdlimit(unsigned int max_descriptors)
 {
 #if defined(HAVE_SETRLIMIT) && defined(RLIMIT_FD_MAX)
   struct rlimit limit;
 
   if (!getrlimit(RLIMIT_FD_MAX, &limit)) {
-    if (limit.rlim_max < MAXCONNECTIONS)
+    if (limit.rlim_max < max_descriptors)
       return limit.rlim_max;
     limit.rlim_cur = limit.rlim_max;    /* make soft limit the max */
     return setrlimit(RLIMIT_FD_MAX, &limit);
@@ -273,7 +408,14 @@ int os_set_fdlimit(unsigned int max_descriptors)
   return 0;
 }
 
-IOResult os_recv_nonb(int fd, char* buf, unsigned int length, 
+/** Attempt to read from a non-blocking socket.
+ * @param[in] fd File descriptor to read from.
+ * @param[out] buf Output buffer to read into.
+ * @param[in] length Number of bytes to read.
+ * @param[out] count_out Receives number of bytes actually read.
+ * @return An IOResult value indicating status.
+ */
+IOResult os_recv_nonb(int fd, char* buf, unsigned int length,
                  unsigned int* count_out)
 {
   int res;
@@ -287,11 +429,18 @@ IOResult os_recv_nonb(int fd, char* buf, unsigned int length,
     return IO_SUCCESS;
   }
   else if (res < 0) {
-    if (EWOULDBLOCK == errno || EAGAIN == errno)
+    if (EWOULDBLOCK == errno || EAGAIN == errno
+#ifdef ENOMEM
+	|| ENOMEM == errno
+#endif
+#ifdef ENOBUFS
+	|| ENOBUFS == errno
+#endif
+	)
       return IO_BLOCKED;
     else
       return IO_FAILURE;
-  } 
+  }
   /*
    * 0   == client closed the connection
    * < 1 == error
@@ -299,26 +448,91 @@ IOResult os_recv_nonb(int fd, char* buf, unsigned int length,
   return IO_FAILURE;
 }
 
-IOResult os_recvfrom_nonb(int fd, char* buf, unsigned int length, 
-                          unsigned int* length_out, struct sockaddr_in* sin_out)
+/** Attempt to read from a non-blocking UDP socket.
+ * @param[in] fd File descriptor to read from.
+ * @param[out] buf Output buffer to read into.
+ * @param[in] length Number of bytes to read.
+ * @param[out] length_out Receives number of bytes actually read.
+ * @param[out] addr_out Peer address that sent the message.
+ * @return An IOResult value indicating status.
+ */
+IOResult os_recvfrom_nonb(int fd, char* buf, unsigned int length,
+                          unsigned int* length_out,
+                          struct irc_sockaddr* addr_out)
 {
+  struct sockaddr_native addr;
+  unsigned int len = sizeof(addr);
   int    res;
-  unsigned int len = sizeof(struct sockaddr_in);
   assert(0 != buf);
   assert(0 != length_out);
-  assert(0 != sin_out);
+  assert(0 != addr_out);
   errno = 0;
+  *length_out = 0;
 
-  res = recvfrom(fd, buf, length, 0, (struct sockaddr*) sin_out, &len);
+  res = recvfrom(fd, buf, length, 0, (struct sockaddr*) &addr, &len);
   if (-1 == res) {
-    if (EWOULDBLOCK == errno || ENOMEM == errno)
+    if (EWOULDBLOCK == errno || ENOMEM == errno
+#ifdef ENOMEM
+	|| ENOMEM == errno
+#endif
+#ifdef ENOBUFS
+	|| ENOBUFS == errno
+#endif
+	)
       return IO_BLOCKED;
     return IO_FAILURE;
   }
+  sockaddr_to_irc(&addr, addr_out);
   *length_out = res;
   return IO_SUCCESS;
 }
 
+/** Attempt to write on a non-blocking UDP socket.
+ * @param[in] fd File descriptor to write to.
+ * @param[in] buf Output buffer to send from.
+ * @param[in] length Number of bytes to write.
+ * @param[out] count_out Receives number of bytes actually written.
+ * @param[in] flags Flags for call to sendto().
+ * @param[in] peer Destination address of the message.
+ * @return An IOResult value indicating status.
+ */
+IOResult os_sendto_nonb(int fd, const char* buf, unsigned int length,
+                        unsigned int* count_out, unsigned int flags,
+                        const struct irc_sockaddr* peer)
+{
+  struct sockaddr_native addr;
+  int res, size;
+  assert(0 != buf);
+  if (count_out)
+    *count_out = 0;
+  errno = 0;
+
+  size = sockaddr_from_irc(&addr, peer, fd);
+  assert((addr.sn_family == AF_INET) == irc_in_addr_is_ipv4(&peer->addr));
+  if (-1 < (res = sendto(fd, buf, length, flags, (struct sockaddr*)&addr, size))) {
+    if (count_out)
+      *count_out = (unsigned) res;
+    return IO_SUCCESS;
+  }
+  else if (EWOULDBLOCK == errno || EAGAIN == errno
+#ifdef ENOMEM
+	   || ENOMEM == errno
+#endif
+#ifdef ENOBUFS
+	   || ENOBUFS == errno
+#endif
+      )
+    return IO_BLOCKED;
+  return IO_FAILURE;
+}
+
+/** Attempt to write on a connected socket.
+ * @param[in] fd File descriptor to write to.
+ * @param[in] buf Output buffer to send from.
+ * @param[in] length Number of bytes to write.
+ * @param[out] count_out Receives number of bytes actually written.
+ * @return An IOResult value indicating status.
+ */
 IOResult os_send_nonb(int fd, const char* buf, unsigned int length, 
                  unsigned int* count_out)
 {
@@ -332,12 +546,25 @@ IOResult os_send_nonb(int fd, const char* buf, unsigned int length,
     *count_out = (unsigned) res;
     return IO_SUCCESS;
   }
-  else if (EWOULDBLOCK == errno || EAGAIN == errno || 
-           ENOMEM == errno || ENOBUFS == errno)
+  else if (EWOULDBLOCK == errno || EAGAIN == errno
+#ifdef ENOMEM
+	   || ENOMEM == errno
+#endif
+#ifdef ENOBUFS
+	   || ENOBUFS == errno
+#endif
+      )
     return IO_BLOCKED;
   return IO_FAILURE;
 }
 
+/** Attempt a vectored write on a connected socket.
+ * @param[in] fd File descriptor to write to.
+ * @param[in] buf Message queue to send from.
+ * @param[out] count_in Number of bytes mapped from \a buf.
+ * @param[out] count_out Receives number of bytes actually written.
+ * @return An IOResult value indicating status.
+ */
 IOResult os_sendv_nonb(int fd, struct MsgQ* buf, unsigned int* count_in,
 		       unsigned int* count_out)
 {
@@ -359,37 +586,138 @@ IOResult os_sendv_nonb(int fd, struct MsgQ* buf, unsigned int* count_in,
     *count_out = (unsigned) res;
     return IO_SUCCESS;
   }
-  else if (EWOULDBLOCK == errno || EAGAIN == errno ||
-	   ENOMEM == errno || ENOBUFS == errno)
+  else if (EWOULDBLOCK == errno || EAGAIN == errno
+#ifdef ENOMEM
+	   || ENOMEM == errno
+#endif
+#ifdef ENOBUFS
+	   || ENOBUFS == errno
+#endif
+      )
     return IO_BLOCKED;
 
   return IO_FAILURE;
 }
 
-IOResult os_connect_nonb(int fd, const struct sockaddr_in* sin)
+/** Open a TCP or UDP socket on a particular address.
+ * @param[in] local Local address to bind to.
+ * @param[in] type SOCK_STREAM or SOCK_DGRAM.
+ * @param[in] port_name Port name (used in error diagnostics).
+ * @return Bound descriptor, or -1 on error.
+ */
+int os_socket(const struct irc_sockaddr* local, int type, const char* port_name)
 {
-  if (connect(fd, (struct sockaddr*) sin, sizeof(struct sockaddr_in)))
+  struct sockaddr_native addr;
+  int size, fd;
+
+  assert(local != 0);
+  size = sockaddr_from_irc(&addr, local, -1);
+  fd = socket(addr.sn_family, type, 0);
+  if (fd < 0) {
+    report_error(SOCKET_ERROR_MSG, port_name, errno);
+    return -1;
+  }
+  if (fd > MAXCLIENTS - 1) {
+    report_error(CONNLIMIT_ERROR_MSG, port_name, 0);
+    close(fd);
+    return -1;
+  }
+  if (!os_set_reuseaddr(fd)) {
+    report_error(REUSEADDR_ERROR_MSG, port_name, errno);
+    close(fd);
+    return -1;
+  }
+  if (!os_set_nonblocking(fd)) {
+    report_error(NONB_ERROR_MSG, port_name, errno);
+    close(fd);
+    return -1;
+  }
+  if (local) {
+    if (bind(fd, (struct sockaddr*)&addr, size)) {
+      report_error(BIND_ERROR_MSG, port_name, errno);
+      close(fd);
+      return -1;
+    }
+  }
+  return fd;
+}
+
+/** Accept a connection on a socket.
+ * @param[in] fd Listening file descriptor.
+ * @param[out] peer Peer address of connection.
+ * @return File descriptor for accepted connection.
+ */
+int os_accept(int fd, struct irc_sockaddr* peer)
+{
+  struct sockaddr_native addr;
+  socklen_t addrlen;
+  int new_fd;
+
+  addrlen = sizeof(addr);
+  new_fd = accept(fd, (struct sockaddr*)&addr, &addrlen);
+  if (new_fd < 0)
+    memset(peer, 0, sizeof(*peer));
+  else
+    sockaddr_to_irc(&addr, peer);
+  return new_fd;
+}
+
+/** Start a non-blocking connection.
+ * @param[in] fd Disconnected file descriptor.
+ * @param[in] sin Target address for connection.
+ * @return IOResult code indicating status.
+ */
+IOResult os_connect_nonb(int fd, const struct irc_sockaddr* sin)
+{
+  struct sockaddr_native addr;
+  int size;
+
+  size = sockaddr_from_irc(&addr, sin, fd);
+  if (connect(fd, (struct sockaddr*) &addr, size))
     return (errno == EINPROGRESS) ? IO_BLOCKED : IO_FAILURE;
   return IO_SUCCESS;
 }
-      
-int os_get_sockname(int fd, struct sockaddr_in* sin_out)
+
+/** Get local address of a socket.
+ * @param[in] fd File descriptor to operate on.
+ * @param[out] sin_out Receives local socket address.
+ * @return Non-zero on success; zero on error.
+ */
+int os_get_sockname(int fd, struct irc_sockaddr* sin_out)
 {
-  unsigned int len = sizeof(struct sockaddr_in);
+  struct sockaddr_native addr;
+  unsigned int len = sizeof(addr);
+
   assert(0 != sin_out);
-  return (0 == getsockname(fd, (struct sockaddr*) sin_out, &len));
+  if (getsockname(fd, (struct sockaddr*) &addr, &len))
+    return 0;
+  sockaddr_to_irc(&addr, sin_out);
+  return 1;
 }
 
-int os_get_peername(int fd, struct sockaddr_in* sin_out)
+/** Get remote address of a socket.
+ * @param[in] fd File descriptor to operate on.
+ * @param[out] sin_out Receives remote socket address.
+ * @return Non-zero on success; zero on error.
+ */
+int os_get_peername(int fd, struct irc_sockaddr* sin_out)
 {
-  unsigned int len = sizeof(struct sockaddr_in);
+  struct sockaddr_native addr;
+  unsigned int len = sizeof(addr);
+
   assert(0 != sin_out);
-  return (0 == getpeername(fd, (struct sockaddr*) sin_out, &len));
+  if (getpeername(fd, (struct sockaddr*) &addr, &len))
+    return 0;
+  sockaddr_to_irc(&addr, sin_out);
+  return 1;
 }
 
+/** Start listening on a socket.
+ * @param[in] fd Disconnected file descriptor.
+ * @param[in] backlog Maximum number of un-accept()ed connections to keep.
+ * @return Non-zero on success; zero on error.
+ */
 int os_set_listen(int fd, int backlog)
 {
   return (0 == listen(fd, backlog));
 }
-
-

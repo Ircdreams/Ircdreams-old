@@ -1,13 +1,12 @@
-/*
- * send.h
- *
- * $Id: send.h,v 1.5 2005/01/24 00:54:39 bugs Exp $
+/** @file send.h
+ * @brief Send messages to certain targets.
+ * @version $Id: send.h,v 1.3 2005/10/23 13:57:47 progs Exp $
  */
 #ifndef INCLUDED_send_h
 #define INCLUDED_send_h
 #ifndef INCLUDED_stdarg_h
 #include <stdarg.h>         /* va_list */
-#define INCLUDED_stdarg_h 
+#define INCLUDED_stdarg_h
 #endif
 #ifndef INCLUDED_time_h
 #include <time.h>	/* time_t */
@@ -22,6 +21,8 @@ struct MsgBuf;
 /*
  * Prototypes
  */
+extern struct SLink *opsarray[];
+
 extern void send_buffer(struct Client* to, struct MsgBuf* buf, int prio);
 
 extern void kill_highest_sendq(int servers_too);
@@ -43,6 +44,12 @@ extern void sendcmdto_prio_one(struct Client *from, const char *cmd,
 			       const char *tok, struct Client *to,
 			       const char *pattern, ...);
 
+/* Send command to servers by flags except one */
+extern void sendcmdto_flag_serv_butone(struct Client *from, const char *cmd,
+                                       const char *tok, struct Client *one,
+                                       int require, int forbid,
+                                       const char *pattern, ...);
+
 /* Send command to all servers except one */
 extern void sendcmdto_serv_butone(struct Client *from, const char *cmd,
 				  const char *tok, struct Client *one,
@@ -57,6 +64,15 @@ extern void sendcmdto_common_channels_butone(struct Client *from,
 
 /* Send command to all channel users on this server */
 extern void sendcmdto_channel_butserv_butone(struct Client *from,
+					     const char *cmd,
+					     const char *tok,
+					     struct Channel *to,
+					     struct Client *one,
+                                             unsigned int skip,
+					     const char *pattern, ...);
+
+/* Send command to all servers interested in a channel */
+extern void sendcmdto_channel_servers_butone(struct Client *from,
                                              const char *cmd,
                                              const char *tok,
                                              struct Channel *to,
@@ -70,21 +86,20 @@ extern void sendcmdto_channel_butone(struct Client *from, const char *cmd,
 				     struct Client *one, unsigned int skip,
 				     const char *pattern, ...);
 
-#define SKIP_DEAF	0x01	/* skip users that are +d */
-#define SKIP_BURST	0x02	/* skip users that are bursting */
-#define SKIP_NONOPS	0x04	/* skip users that aren't chanops */
-#define SKIP_NONVOICES  0x08    /* skip users that aren't voiced (includes
+#define SKIP_DEAF	0x01	/**< skip users that are +d */
+#define SKIP_BURST	0x02	/**< skip users that are bursting */
+#define SKIP_NONOPS	0x04	/**< skip users that aren't chanops */
+#define SKIP_NONVOICES  0x08    /**< skip users that aren't voiced (includes
                                    chanops) */
-#define SKIP_NONHOPS    0x10
 
 /* Send command to all users having a particular flag set */
 extern void sendwallto_group_butone(struct Client *from, int type,
 				    struct Client *one, const char *pattern,
 				    ...);
 
-#define WALL_DESYNCH	1
-#define WALL_WALLOPS	2
-#define WALL_WALLUSERS	3
+#define WALL_DESYNCH	1       /**< send as a DESYNCH message */
+#define WALL_WALLOPS	2       /**< send to all +w opers */
+#define WALL_WALLUSERS	3       /**< send to all +w users */
 
 /* Send command to all matching clients */
 extern void sendcmdto_match_butone(struct Client *from, const char *cmd,
@@ -105,10 +120,10 @@ extern void sendto_opmask_butone_ratelimited(struct Client *one,
 extern void vsendto_opmask_butone(struct Client *one, unsigned int mask,
 				  const char *pattern, va_list vl);
 
-// envoi une notice à tous les ircops
 extern void sendto_allops(struct Client *from, unsigned int mask, const char *pattern, ...);
-
-extern void sendto_channels_inviso_join(struct Client *user);
-extern void sendto_channels_inviso_part(struct Client *user);
+extern void sendto_allops_butserv(struct Client *one, struct Client *from,
+				unsigned int mask, const char *pattern, ...);
+extern void vsendto_allops_butserv(struct Client *one, struct Client *from, unsigned int mask,
+			   const char *pattern, va_list vl);
 
 #endif /* INCLUDED_send_h */

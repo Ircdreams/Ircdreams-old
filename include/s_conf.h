@@ -1,7 +1,6 @@
-/*
- * s_conf.h
- *
- * $Id: s_conf.h,v 1.14 2006/01/25 16:35:34 bugs Exp $ 
+/** @file s_conf.h
+ * @brief ircd configuration file API.
+ * @version $Id: s_conf.h,v 1.3 2005/10/26 22:55:57 progs Exp $
  */
 #ifndef INCLUDED_s_conf_h
 #define INCLUDED_s_conf_h
@@ -13,15 +12,11 @@
 #include <sys/types.h>
 #define INCLUDED_sys_types_h
 #endif
-#ifndef INCLUDED_netinet_in_h
-#include <netinet/in.h>        /* struct in_addr */
-#define INCLUDED_netinet_in_h
-#endif
+#include "client.h"
 
 struct Client;
 struct SLink;
-struct TRecord;
-
+struct Message;
 
 /*
  * General defines
@@ -31,179 +26,149 @@ struct TRecord;
  * Macros
  */
 
-#define CONF_ILLEGAL            0x80000000
-#define CONF_MATCH              0x40000000
-#define CONF_CLIENT             0x0002
-#define CONF_SERVER             0x0004
-#define CONF_OPERATOR           0x0020
-#define CONF_LEAF               0x1000
-#define CONF_HUB                0x4000
-#define CONF_UWORLD             0x8000
-#define CONF_HELPER             0x10000
-#define CONF_VHOST		0x20000
-#define CONF_WHOIS		0x40000
+#define CONF_ILLEGAL            0x80000000 /**< Delete the ConfItem when no remaining clients. */
+#define CONF_CLIENT             0x0002     /**< ConfItem describes a Client block */
+#define CONF_SERVER             0x0004     /**< ConfItem describes a Connect block */
+#define CONF_OPERATOR           0x0020     /**< ConfItem describes an Operator block */
+#define CONF_UWORLD             0x8000     /**< ConfItem describes a Uworld server */
 
+#define CONF_AUTOCONNECT        0x0001     /**< Autoconnect to a server */
+
+/** Indicates ConfItem types that count associated clients. */
 #define CONF_CLIENT_MASK        (CONF_CLIENT | CONF_OPERATOR | CONF_SERVER)
 
+/** Checks whether the CONF_ILLEGAL bit is set on \a x. */
 #define IsIllegal(x)    ((x)->status & CONF_ILLEGAL)
 
 /*
  * Structures
  */
 
-struct ConfItem {
-  struct ConfItem*         next;
-  unsigned int             status;      /* If CONF_ILLEGAL, delete when no clients */
-  unsigned int             clients;     /* Number of *LOCAL* clients using this */
-  struct ConnectionClass*  conn_class;  /* Class of connection */
-  struct in_addr           ipnum;       /* ip number of host field */
-  struct in_addr           origin;      /* ip number of connect origin */
-  char*                    host;
-  char*                    passwd;
-  char*                    name;
-  time_t                   hold;        /* Hold until this time (calendar time) */
-  int                      dns_pending; /* a dns request is pending */
-  unsigned short           port;
-  char 		           bits;        /* Number of bits for ipkills */
+/** Configuration item to limit peer or client access. */
+struct ConfItem
+{
+  struct ConfItem *next;    /**< Next ConfItem in #GlobalConfList */
+  unsigned int status;      /**< Set of CONF_* bits. */
+  unsigned int clients;     /**< Number of *LOCAL* clients using this */
+  unsigned int maximum;     /**< For CONF_SERVER, max hops.
+                               For CONF_CLIENT, max connects per IP. */
+  struct ConnectionClass *conn_class;  /**< Class of connection */
+  struct irc_sockaddr origin;  /**< Local address for outbound connections */
+  struct irc_sockaddr address; /**< IP and port */
+  char *username;     /**< For CONF_CLIENT and CONF_OPERATOR, username mask. */
+  char *host;         /**< Peer hostname */
+  char *origin_name;  /**< Text form of origin address */
+  char *passwd;       /**< Password field */
+  char *name;         /**< Name of peer */
+  char *hub_limit;    /**< Mask that limits servers allowed behind
+                         this one. */
+  time_t hold;        /**< Earliest time to attempt an outbound
+                         connect on this ConfItem. */
+  int dns_pending;    /**< A dns request is pending. */
+  int flags;          /**< Additional modifiers for item. */
+  int addrbits;       /**< Number of bits valid in ConfItem::address. */
+  struct Privs privs; /**< Privileges for opers. */
+  /** Used to detect if a privilege has been set by this ConfItem. */
+  struct Privs privs_dirty;
 };
 
-struct ServerConf {
-  struct ServerConf* next;
-  char*              hostname;
-  char*              passwd;
-  char*              alias;
-  struct in_addr     address;
-  int                port;
-  int                dns_pending;
-  int                connected;
-  time_t             hold;
-  struct ConnectionClass*  conn_class;
+/** Channel quarantine structure. */
+struct qline
+{
+  struct qline *next; /**< Next qline in #GlobalQuarantineList. */
+  char *chname;       /**< Quarantined channel name. */
+  char *reason;       /**< Reason for quarantine. */
 };
 
+/** Local K-line structure. */
 struct DenyConf {
-  struct DenyConf*    next;
-  char*               hostmask;
-  char*               message;
-  char*               usermask;
-  unsigned int        address;
-  unsigned int        flags;
-  char                bits;        /* Number of bits for ipkills */
+  struct DenyConf*    next;     /**< Next DenyConf in #denyConfList. */
+  char*               hostmask; /**< Mask for  IP or hostname. */
+  char*               message;  /**< Message to send to denied users. */
+  char*               usermask; /**< Mask for client's username. */
+  char*               realmask; /**< Mask for realname. */
+  struct irc_in_addr  address;  /**< Address for IP-based denies. */
+  unsigned int        flags;    /**< Interpretation flags for the above.  */
+  unsigned char       bits;     /**< Number of bits for ipkills */
 };
 
-#define DENY_FLAGS_FILE     0x0001 /* Comment is a filename */
-#define DENY_FLAGS_IP       0x0002 /* K-line by IP address */
-#define DENY_FLAGS_REALNAME 0x0004 /* K-line by real name */
+#define DENY_FLAGS_FILE     0x0001 /**< Comment is a filename */
 
-/*
- * A line: A:<line 1>:<line 2>:<line 3>
- */
+/** To change an user's host. */
+struct VHostConf {
+	struct VHostConf*    next;    /**< Next SHostConf in #slineList. */
+	char*                vhost;   /**< Virtual host. */
+	char*                pass;    /**< Password. */
+	char*                realhost;/**< If an use have this realhost, it changes to vhost */
+	int                  flags;   /**< Flags */
+};
+
+#define VHOST_FLAGS_PREFIX   0x01     /**< Need to have an account, put it in front of vhost */
+#define VhostConfIsPrefixed(x) ((x)->flags & VHOST_FLAGS_PREFIX) /**< Check if vhost struct have flag VHOST_FLAGS_PREFIX */
+
+/** Local server configuration. */
 struct LocalConf {
-  char*          name;
-  char*          description;
-  struct in_addr vhost_address;
-  unsigned int   numeric;
-  char*          location1;
-  char*          location2;
-  char*          contact;
-};
-
-struct MotdItem {
-  char line[82];
-  struct MotdItem *next;
-};
-
-struct MotdConf {
-  struct MotdConf* next;
-  char* hostmask;
-  char* path;
+  char*          name;        /**< Name of server. */
+  char*          description; /**< Description of server. */
+  unsigned int   numeric;     /**< Globally assigned server numnick. */
+  char*          location1;   /**< First line of location information. */
+  char*          location2;   /**< Second line of location information. */
+  char*          contact;     /**< Admin contact information. */
 };
 
 enum {
-  CRULE_AUTO = 1,
-  CRULE_ALL  = 2,
+  CRULE_AUTO = 1, /**< CRule applies to automatic connections. */
+  CRULE_ALL  = 2, /**< CRule applies to oper-requested connections. */
   CRULE_MASK = 3
 };
 
-struct CRuleNode;
-
+/** Connection rule configuration. */
 struct CRuleConf {
-  struct CRuleConf* next;
-  char*             hostmask;
-  char*             rule;
-  int               type;
-  struct CRuleNode* node;
+  struct CRuleConf* next;     /**< Next CRule in cruleConfList. */
+  char*             hostmask; /**< Mask of affected server names. */
+  char*             rule;     /**< Text version of the rule. */
+  int               type;     /**< One of CRULE_AUTO or CRULE_ALL. */
+  struct CRuleNode* node;     /**< Parsed form of the rule. */
 };
 
-struct TRecord {
-  struct TRecord *next;
-  char *hostmask;
-  struct MotdItem *tmotd;
-  struct tm tmotd_tm;
-};
-
+/** Authorization check result. */
 enum AuthorizationCheckResult {
-  ACR_OK,
-  ACR_NO_AUTHORIZATION,
-  ACR_TOO_MANY_IN_CLASS,
-  ACR_TOO_MANY_FROM_IP,
-  ACR_ALREADY_AUTHORIZED,
-  ACR_BAD_SOCKET
+  ACR_OK,                 /**< User accepted. */
+  ACR_NO_AUTHORIZATION,   /**< No matching ConfItem for the user. */
+  ACR_TOO_MANY_IN_CLASS,  /**< Connection class was already full. */
+  ACR_TOO_MANY_FROM_IP,   /**< User's IP already has max connections. */
+  ACR_ALREADY_AUTHORIZED, /**< User already had an attached ConfItem. */
+  ACR_BAD_SOCKET          /**< Client has bad file descriptor. */
 };
 
-struct qline {
-  struct qline *next;
-  char *chname;
-  char *reason;
+/** Target description for service commands. */
+struct nick_host {
+  struct nick_host *next; /**< Next nick_host struct in struct s_map. */
+  int nicklen;            /**< offset of @ part of server string */
+  char nick[1];           /**< start of nick\@server string */
 };
 
-struct sline {
-  struct sline *next;
-  char *spoofhost;
-  char *realhost;
-  char *username;
-  struct in_addr address;
-  unsigned int flags;
-  char bits; /* Number of bits for CIDR match on realhost */
-};
-
-#define SLINE_FLAGS_HOSTNAME 0x0001 /* S-line by hostname */
-#define SLINE_FLAGS_IP       0x0002 /* S-line by IP address/CIDR */
+#define SMAP_FAST 1           /**< Command does not have MFLG_SLOW. */
 
 /** Target set for a service pseudo-command. */
 struct s_map {
   struct s_map *next;         /**< Next element in #GlobalServiceMapList. */
   struct Message *msg;        /**< Message element formed for this mapping. */
-  char *nick;	              /**< nickname of the mapping. */
-  char *serveur;	      /**< servername of the mapping */
+  char *name;                 /**< Text name of the mapping. */
   char *command;              /**< Command name to use. */
   char *prepend;              /**< Extra text to prepend to user's text. */
   unsigned int flags;         /**< Bitwise map of SMAP_* flags. */
+  struct nick_host *services; /**< Linked list of possible targets. */
 };
 
-/*
- * str2prefix() - converts a string to in_addr and bits.
- */
-
-#define IPV4_MAX_BITLEN 32
-
-struct prefix
-{
-    struct in_addr address;
-    unsigned char bits;
-};
 
 /*
  * GLOBALS
  */
 extern struct ConfItem* GlobalConfList;
 extern int              GlobalConfCount;
-extern struct tm        motd_tm;
-extern struct MotdItem* motd;
-extern struct MotdItem* rmotd;
-extern struct TRecord*  tdata;
-extern struct qline*	GlobalQuarantineList;
-extern struct sline*	GlobalSList;
 extern struct s_map*    GlobalServiceMapList;
+extern struct qline*    GlobalQuarantineList;
 
 /*
  * Proto types
@@ -212,13 +177,11 @@ extern struct s_map*    GlobalServiceMapList;
 extern int init_conf(void);
 
 extern const struct LocalConf* conf_get_local(void);
-extern const struct MotdConf*  conf_get_motd_list(void);
 extern const struct CRuleConf* conf_get_crule_list(void);
 extern const struct DenyConf*  conf_get_deny_list(void);
+extern const struct VHostConf* conf_get_vhost_list(void);
 
 extern const char* conf_eval_crule(const char* name, int mask);
-extern struct ConfItem* find_vhost(char *username, char *password);
-extern struct ConfItem* find_rhost(char *username, char *password);
 
 extern struct ConfItem* attach_confs_byhost(struct Client* cptr, const char* host, int statmask);
 extern struct ConfItem* find_conf_byhost(struct SLink* lp, const char* host, int statmask);
@@ -227,22 +190,17 @@ extern struct ConfItem* conf_find_server(const char* name);
 
 extern void det_confs_butmask(struct Client *cptr, int mask);
 extern enum AuthorizationCheckResult attach_conf(struct Client *cptr, struct ConfItem *aconf);
-extern struct ConfItem* find_conf_exact(const char* name, const char* user,
-                                        const char* host, int statmask);
+extern struct ConfItem* find_conf_exact(const char* name, struct Client *cptr, int statmask);
 extern enum AuthorizationCheckResult conf_check_client(struct Client *cptr);
 extern int  conf_check_server(struct Client *cptr);
-extern struct ConfItem* find_conf_name(const char* name, int statmask);
 extern int rehash(struct Client *cptr, int sig);
-extern void read_tlines(void);
 extern int find_kill(struct Client *cptr);
-extern int find_restrict(struct Client *cptr);
-extern struct MotdItem* read_motd(const char* motdfile);
-extern char* find_quarantine(const char* chname);
-extern char *oflagstr(long);
-extern void conf_add_sline(const char* const* fields, int count);
-extern int conf_check_slines(struct Client *cptr);
-extern void clear_slines(void);
-extern int str2prefix(char *s, struct prefix *p);
+extern const char *find_quarantine(const char* chname);
+extern void lookup_confhost(struct ConfItem *aconf);
+extern void conf_parse_userhost(struct ConfItem *aconf, char *host);
+extern struct ConfItem *conf_debug_iline(const char *client);
 extern void free_mapping(struct s_map *smap);
+
+extern void yyerror(const char *msg);
 
 #endif /* INCLUDED_s_conf_h */

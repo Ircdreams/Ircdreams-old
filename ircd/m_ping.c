@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_ping.c,v 1.2 2005/01/24 01:19:23 bugs Exp $
+ * $Id: m_ping.c,v 1.1.1.1 2005/10/01 17:28:05 progs Exp $
  */
 
 /*
@@ -130,10 +130,11 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "hash.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "ircd.h"
@@ -144,9 +145,9 @@
 #include "s_debug.h"
 #include "send.h"
 
-#include <assert.h>
-#include <string.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <stdlib.h>
+#include <string.h>
 
 /*
  * m_ping - generic message handler
@@ -168,7 +169,7 @@ int m_ping(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 }
 
 /*
- * mo_ping - generic message handler
+ * mo_ping - oper message handler
  *
  * parv[0] = sender prefix
  * parv[1] = origin
@@ -177,13 +178,14 @@ int m_ping(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 int mo_ping(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 {
   struct Client* acptr;
-  char*          destination;
+  char *destination, *origin;
   assert(0 != cptr);
   assert(cptr == sptr);
 
   if (parc < 2 || EmptyString(parv[1]))
     return send_reply(sptr, ERR_NOORIGIN);
 
+  origin = parv[1];
   destination = parv[2];        /* Will get NULL or pointer (parc >= 2!!) */
 
   if (!EmptyString(destination) && 0 != ircd_strcmp(destination, cli_name(&me))) {
@@ -221,7 +223,7 @@ int mo_ping(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
  */
 
 /*
- * ms_ping - server message handler template
+ * ms_ping - server message handler
  */
 int ms_ping(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 {
@@ -242,14 +244,14 @@ int ms_ping(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   origin      = parv[1];
   destination = parv[2];        /* Will get NULL or pointer (parc >= 2!!) */
 
-  if (parc > 3) {
+  if (parc > 3)
+  {
     /* AsLL ping, send reply back */
     int diff = atoi(militime_float(parv[3]));
     sendcmdto_one(&me, CMD_PONG, sptr, "%C %s %s %i %s", &me, origin,
-		  parv[3], diff, militime_float(NULL));
+                  parv[3], diff, militime_float(NULL));
     return 0;
   }
-
   if (!EmptyString(destination) && 0 != ircd_strcmp(destination, cli_name(&me))) {
     if ((acptr = FindServer(destination))) {
       /*

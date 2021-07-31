@@ -1,7 +1,6 @@
-/*
- * s_bsd.h
- *
- * $Id: s_bsd.h,v 1.2 2004/07/21 18:26:32 bugs Exp $
+/** @file s_bsd.h
+ * @brief Wrapper functions to avoid direct use of BSD APIs.
+ * @version $Id: s_bsd.h,v 1.1.1.1 2005/10/01 17:27:01 progs Exp $
  */
 #ifndef INCLUDED_s_bsd_h
 #define INCLUDED_s_bsd_h
@@ -17,8 +16,8 @@
 struct Client;
 struct ConfItem;
 struct Listener;
-struct DNSReply;
 struct MsgQ;
+struct irc_in_addr;
 
 /*
  * TCP window sizes
@@ -26,7 +25,9 @@ struct MsgQ;
  * set client to a smaller size to allow TCP flow control
  * to reduce flooding
  */
+/** Default TCP window size for server connections. */
 #define SERVER_TCP_WINDOW 61440
+/** Default TCP window size for client connections. */
 #define CLIENT_TCP_WINDOW 2048
 
 extern void report_error(const char* text, const char* who, int err);
@@ -48,52 +49,23 @@ extern const char* const SETBUFS_ERROR_MSG;
 extern const char* const TOS_ERROR_MSG;
 extern const char* const REGISTER_ERROR_MSG;
 
-
 extern int            HighestFd;
 extern struct Client* LocalClientArray[MAXCONNECTIONS];
-extern int            OpenFileDescriptorCount;
+extern struct irc_sockaddr VirtualHost_v4;
+extern struct irc_sockaddr VirtualHost_v6;
 
-extern struct sockaddr_in VirtualHost;
-
-enum PollType {
-  PT_NONE,
-  PT_READ,
-  PT_WRITE
-};
-
-struct Pollable;
-
-typedef int (*PollReadyFn)(struct Pollable*);
-
-struct Pollable {
-  struct Pollable* next;
-  struct Pollable* prev;
-  int              fd;
-  int              index;
-  int              state;
-  PollReadyFn      r_handler;
-  PollReadyFn      w_handler;
-};
-  
 /*
  * Proto types
  */
 extern unsigned int deliver_it(struct Client *cptr, struct MsgQ *buf);
-extern int connect_server(struct ConfItem* aconf, struct Client* by,
-                          struct DNSReply* reply);
-extern void release_dns_reply(struct Client* cptr);
+extern int connect_server(struct ConfItem* aconf, struct Client* by);
 extern int  net_close_unregistered_connections(struct Client* source);
 extern void close_connection(struct Client *cptr);
-#ifdef USE_SSL
-extern void add_connection(struct Listener* listener, int fd, void *ssl);
-#else
 extern void add_connection(struct Listener* listener, int fd);
-#endif /* USE_SSL */
 extern int  read_message(time_t delay);
 extern void init_server_identity(void);
 extern void close_connections(int close_stderr);
 extern int  init_connection_limits(void);
-extern void set_virtual_host(struct in_addr addr);
 extern void update_write(struct Client* cptr);
 
 #endif /* INCLUDED_s_bsd_h */

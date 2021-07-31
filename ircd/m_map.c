@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_map.c,v 1.3 2005/01/24 01:52:33 bugs Exp $
+ * $Id: m_map.c,v 1.1.1.1 2005/10/01 17:28:01 progs Exp $
  */
 
 /*
@@ -79,12 +79,13 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "ircd.h"
 #include "ircd_defs.h"
 #include "ircd_features.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_snprintf.h"
 #include "ircd_string.h"
@@ -97,32 +98,39 @@
 #include "send.h"
 #include "querycmds.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <stdio.h>
 #include <string.h>
 
 static void dump_map(struct Client *cptr, struct Client *server, char *mask, int prompt_length)
 {
+  const char *chr;
   static char prompt[64];
   struct DLink *lp;
-  char *p = &prompt[prompt_length];
+  char *p = prompt + prompt_length;
   int cnt = 0;
-
+  
   *p = '\0';
   if (prompt_length > 60)
     send_reply(cptr, RPL_MAPMORE, prompt, cli_name(server));
-  else {
+  else
+  {
     char lag[512];
     if (cli_serv(server)->lag>10000)
-    	lag[0]=0;
+      lag[0]=0;
     else if (cli_serv(server)->lag<0)
-    	strcpy(lag,"(0s)");
+      strcpy(lag,"(0s)");
     else
-    	sprintf(lag,"(%is)",cli_serv(server)->lag);
-    send_reply(cptr, RPL_MAP, prompt, (
-    		(IsBurst(server)) ? "*" : (IsBurstAck(server) ? "!" : "")),
-	       cli_name(server), lag, (server == &me) ? UserStats.local_clients :
-	       cli_serv(server)->clients);
+      sprintf(lag,"(%is)",cli_serv(server)->lag);
+    if (IsBurst(server))
+      chr = "*";
+    else if (IsBurstAck(server))
+      chr = "!";
+    else
+      chr = "";
+    send_reply(cptr, RPL_MAP, prompt, chr, cli_name(server),
+               lag, (server == &me) ? UserStats.local_clients :
+                                      cli_serv(server)->clients);
   }
   if (prompt_length > 0)
   {
@@ -163,12 +171,23 @@ static void dump_map(struct Client *cptr, struct Client *server, char *mask, int
  */
 int m_map(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 {
-  if (feature_bool(FEAT_HIS_MAP) && !IsAnOper(sptr)) {
+  if (feature_bool(FEAT_HIS_MAP) && !IsAnOper(sptr))
+  {
     sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :%s %s", sptr,
-		  "/MAP a été désactivé. "
-		  "Visitez ", feature_str(FEAT_HIS_URLSERVERS));
+                  "/MAP has been disabled, from CFV-165.  "
+                  "Visit ", feature_str(FEAT_HIS_URLSERVERS));
     return 0;
   }
+  if (parc < 2)
+    parv[1] = "*";
+  dump_map(sptr, &me, parv[1], 0);
+  send_reply(sptr, RPL_MAPEND);
+
+  return 0;
+}
+
+int mo_map(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
+{
   if (parc < 2)
     parv[1] = "*";
 

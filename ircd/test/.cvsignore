@@ -1,0 +1,6 @@
+ircd_match_t
+Makefile
+ircd_chattr_t
+ircd_in_addr_t
+ircd_string_t
+*.log

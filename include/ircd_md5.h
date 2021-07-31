@@ -1,43 +1,43 @@
-/* MD5.H - header file for MD5C.C
+/*
+ * IRC - Internet Relay Chat, include/ircd_md5.h
+ *
+ * This code implements the MD5 message-digest algorithm.
+ * The algorithm is due to Ron Rivest.  This code was
+ * written by Colin Plumb in 1993, no copyright is claimed.
+ * This code is in the public domain; do with it what you wish.
+ *
+ * Equivalent code is available from RSA Data Security, Inc.
+ * This code has been tested against that, and is equivalent,
+ * except that you don't need to include two pages of legalese
+ * with every copy.
+ *
+ * ircuified 2002 by hikari
  */
-
-/* Copyright (C) 1991, RSA Data Security, Inc. All rights reserved.
-
-   License to copy and use this software is granted provided that it
-   is identified as the "RSA Data Security, Inc. MD5 Message-Digest
-   Algorithm" in all material mentioning or referencing this software
-   or this function.
-
-   License is also granted to make and use derivative works provided
-   that such works are identified as "derived from the RSA Data
-   Security, Inc. MD5 Message-Digest Algorithm" in all material
-   mentioning or referencing the derived work.  
-                                                                    
-   RSA Data Security, Inc. makes no representations concerning either
-   the merchantability of this software or the suitability of this
-   software for any particular purpose. It is provided "as is"
-   without express or implied warranty of any kind.  
-                                                                    
-   These notices must be retained in any copies of any part of this
-   documentation and/or software.  
+/** @file
+ * @brief MD5 implementation for ircu.
+ * @version $Id: ircd_md5.h,v 1.1.1.1 2005/10/01 17:26:55 progs Exp $
  */
+#ifndef ircd_md5_h
+#define ircd_md5_h
 
-/* MD5 context. */
+/** Typedef for an unsigned 32-bit integer. */
+typedef unsigned int uint32;
 
-#ifndef MD5_H
-#define MD5_H
-#ifndef GLOBAL_H
+/** MD5 context structure. */
+struct MD5Context {
+	uint32 buf[4];        /**< Current digest state/value. */
+	uint32 bits[2];       /**< Number of bits hashed so far. */
+	unsigned char in[64]; /**< Residual input buffer. */
+};
 
-#endif /* GLOBAL_H */
+void MD5Init(struct MD5Context *);
+void MD5Update(struct MD5Context *, unsigned const char *, unsigned);
+void MD5Final(unsigned char digest[16], struct MD5Context *);
+void MD5Transform(uint32 buf[4], uint32 const in[16]);
 
-typedef struct {
-  UINT4 state[4];                                           /* state (ABCD) */
-  UINT4 count[2];                /* number of bits, modulo 2^64 (lsb first) */
-  unsigned char buffer[64];                                 /* input buffer */
-} MD5BIS_CTX;
+char *crypt_md5(const char *pw, const char *salt);
 
-void MD5Init PROTO_LIST ((MD5BIS_CTX *));
-void MD5Update PROTO_LIST ((MD5BIS_CTX *, unsigned char *, unsigned int));
-void MD5Final PROTO_LIST ((unsigned char [16], MD5BIS_CTX *));
+/** Helper typedef for the MD5 context structure. */
+typedef struct MD5Context MD5_CTX;
 
-#endif /* MD5_H */
+#endif /* ircd_md5_h */

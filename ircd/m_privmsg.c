@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_privmsg.c,v 1.3 2005/06/04 13:33:40 bugs Exp $
+ * $Id: m_privmsg.c,v 1.1.1.1 2005/10/01 17:28:06 progs Exp $
  */
 
 /*
@@ -79,12 +79,13 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "ircd.h"
 #include "ircd_chattr.h"
 #include "ircd_features.h"
+#include "ircd_log.h"
 #include "ircd_relay.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
@@ -93,7 +94,7 @@
 #include "numeric.h"
 #include "send.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <string.h>
 
 /*
@@ -130,7 +131,7 @@ int m_privmsg(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
      * channel msg?
      */
     if (IsChannelPrefix(*name)) {
-      relay_channel_message(sptr, name, parv[parc - 1], count);
+      relay_channel_message(sptr, name, parv[parc - 1]);
     }
     /*
      * we have to check for the '@' at least once no matter what we do
@@ -145,7 +146,7 @@ int m_privmsg(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 }
 
 /*
- * ms_privmsg - server message handler template
+ * ms_privmsg - server message handler
  */
 int ms_privmsg(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 {
@@ -220,7 +221,7 @@ int mo_privmsg(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
      * channel msg?
      */
     if (IsChannelPrefix(*name))
-      relay_channel_message(sptr, name, parv[parc - 1], count);
+      relay_channel_message(sptr, name, parv[parc - 1]);
 
     else if (*name == '$')
       relay_masked_message(sptr, name, parv[parc - 1]);

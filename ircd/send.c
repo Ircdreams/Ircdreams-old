@@ -16,10 +16,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: send.c,v 1.23 2005/09/20 13:52:43 bugs Exp $
  */
-#include "../config.h"
+/** @file
+ * @brief Send messages to certain targets.
+ * @version $Id: send.c,v 1.6 2005/10/23 13:57:46 progs Exp $
+ */
+#include "config.h"
 
 #include "send.h"
 #include "channel.h"
@@ -27,6 +29,7 @@
 #include "client.h"
 #include "ircd.h"
 #include "ircd_features.h"
+#include "ircd_log.h"
 #include "ircd_snprintf.h"
 #include "ircd_string.h"
 #include "list.h"
@@ -38,18 +41,20 @@
 #include "s_debug.h"
 #include "s_misc.h"
 #include "s_user.h"
-#include "ircd_struct.h"
+#include "struct.h"
 #include "sys.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <stdio.h>
 #include <string.h>
 
-
+/** Last used marker value. */
 static int sentalong_marker;
+/** Array of users with the corresponding server notice mask bit set. */
 struct SLink *opsarray[32];     /* don't use highest bit unless you change
 				   atoi to strtoul in sendto_op_mask() */
-static struct Connection *send_queues = 0;
+/** Linked list of all connections with data queued to send. */
+static struct Connection *send_queues;
 
 /*
  * dead_link
@@ -67,7 +72,12 @@ static struct Connection *send_queues = 0;
  * Also, the notice is skipped for "uninteresting" cases,
  * like Persons and yet unknown connections...
  */
-
+/** Mark a client as dead, even if they are not the current message source.
+ * This is done by setting the DEADSOCKET flag on the user and letting the
+ * main loop perform the actual exit logic.
+ * @param[in,out] to Client being killed.
+ * @param[in] notice Message for local opers.
+ */
 static void dead_link(struct Client *to, char *notice)
 {
   SetFlag(to, FLAG_DEADSOCKET);
@@ -85,31 +95,39 @@ static void dead_link(struct Client *to, char *notice)
   ircd_strncpy(cli_info(to), notice, REALLEN);
 
   if (!IsUser(to) && !IsUnknown(to) && !HasFlag(to, FLAG_CLOSING))
-    sendto_opmask_butone(0, SNO_OLDSNO, "%s pour %s", cli_info(to), cli_name(to));
+    sendto_opmask_butone(0, SNO_OLDSNO, "%s for %s", cli_info(to), cli_name(to));
   Debug((DEBUG_ERROR, cli_info(to)));
 }
 
+/** Test whether we can send to a client.
+ * @param[in] to Client we want to send to.
+ * @return Non-zero if we can send to the client.
+ */
 static int can_send(struct Client* to)
 {
   assert(0 != to);
   return (IsDead(to) || IsMe(to) || -1 == cli_fd(to)) ? 0 : 1;
 }
 
-/* This helper routine kills the connection with the highest sendq, to
- * try to free up some buffer memory.
+/** Close the connection with the highest sendq.
+ * This should be called when we need to free buffer memory.
+ * @param[in] servers_too If non-zero, consider killing servers, too.
  */
-void kill_highest_sendq(int servers_too)
+void
+kill_highest_sendq(int servers_too)
 {
   int i;
   unsigned int highest_sendq = 0;
   struct Client *highest_client = 0;
 
-  for (i = HighestFd; i >= 0; i--) {
+  for (i = HighestFd; i >= 0; i--)
+  {
     if (!LocalClientArray[i] || (!servers_too && cli_serv(LocalClientArray[i])))
       continue; /* skip servers */
 
     /* If this sendq is higher than one we last saw, remember it */
-    if (MsgQLength(&(cli_sendQ(LocalClientArray[i]))) > highest_sendq) {
+    if (MsgQLength(&(cli_sendQ(LocalClientArray[i]))) > highest_sendq)
+    {
       highest_client = LocalClientArray[i];
       highest_sendq = MsgQLength(&(cli_sendQ(highest_client)));
     }
@@ -128,6 +146,9 @@ void kill_highest_sendq(int servers_too)
  * When flushing, all we do is empty the obuffer array for each local
  * client and try to send it. if we cant send it, it goes into the sendQ
  * -avalon
+ */
+/** Flush data queued for one or all connections.
+ * @param[in] cptr Client to flush (if NULL, do all).
  */
 void flush_connections(struct Client* cptr)
 {
@@ -149,6 +170,9 @@ void flush_connections(struct Client* cptr)
  * This function is called from the main select-loop (or whatever)
  * when there is a chance that some output would be possible. This
  * attempts to empty the send queue as far as possible...
+ */
+/** Attempt to send data queued for a client.
+ * @param[in] to Client to send data to.
  */
 void send_queued(struct Client *to)
 {
@@ -184,6 +208,11 @@ void send_queued(struct Client *to)
   update_write(to);
 }
 
+/** Try to send a buffer to a client, queueing it if needed.
+ * @param[in,out] to Client to send message to.
+ * @param[in] buf Message to send.
+ * @param[in] prio If non-zero, send as high priority.
+ */
 void send_buffer(struct Client* to, struct MsgBuf* buf, int prio)
 {
   assert(0 != to);
@@ -198,7 +227,7 @@ void send_buffer(struct Client* to, struct MsgBuf* buf, int prio)
      */
     return;
 
-  if (MsgQLength(&(cli_sendQ(to))) > get_sendq(to) && !IsAnOper(to) && !IsProtect(to)) {
+  if (MsgQLength(&(cli_sendQ(to))) > get_sendq(to)) {
     if (IsServer(to))
       sendto_opmask_butone(0, SNO_OLDSNO, "Max SendQ limit exceeded for %C: "
 			   "%zu > %zu", to, MsgQLength(&(cli_sendQ(to))),
@@ -239,6 +268,13 @@ void send_buffer(struct Client* to, struct MsgBuf* buf, int prio)
  *  addition -- Armin, 8jun90 (gruner@informatik.tu-muenchen.de)
  */
 
+/** Check whether a client matches a target mask.
+ * @param[in] from Client trying to send a message (ignored).
+ * @param[in] one Client being considered as a target.
+ * @param[in] mask Mask for matching against.
+ * @param[in] what Type of match (either MATCH_HOST or MATCH_SERVER).
+ * @return Non-zero if \a one matches, zero if not.
+ */
 static int match_it(struct Client *from, struct Client *one, const char *mask, int what)
 {
   switch (what)
@@ -252,9 +288,9 @@ static int match_it(struct Client *from, struct Client *one, const char *mask, i
   }
 }
 
-/*
- * Send a raw command to a single client; use *ONLY* if you absolutely
- * must send a command without a prefix.
+/** Send an unprefixed line to a client.
+ * @param[in] to Client receiving message.
+ * @param[in] pattern Format string of message.
  */
 void sendrawto_one(struct Client *to, const char *pattern, ...)
 {
@@ -270,10 +306,12 @@ void sendrawto_one(struct Client *to, const char *pattern, ...)
   msgq_clean(mb);
 }
 
-/*
- * Send a (prefixed) command to a single client; select which of <cmd>
- * <tok> to use depending on if to is a server or not.  <from> is the
- * originator of the command.
+/** Send a (prefixed) command to a single client.
+ * @param[in] from Client sending the command.
+ * @param[in] cmd Long name of command (used if \a to is a user).
+ * @param[in] tok Short name of command (used if \a to is a server).
+ * @param[in] to Destination of command.
+ * @param[in] pattern Format string for command arguments.
  */
 void sendcmdto_one(struct Client *from, const char *cmd, const char *tok,
 		   struct Client *to, const char *pattern, ...)
@@ -296,10 +334,13 @@ void sendcmdto_one(struct Client *from, const char *cmd, const char *tok,
   msgq_clean(mb);
 }
 
-/*
- * Send a (prefixed) command to a single client in the priority queue;
- * select  which of <cmd> <tok> to use depending on if to is a server
- *or not.  <from> is the originator of the command.
+/**
+ * Send a (prefixed) command to a single client in the priority queue.
+ * @param[in] from Client sending the command.
+ * @param[in] cmd Long name of command (used if \a to is a user).
+ * @param[in] tok Short name of command (used if \a to is a server).
+ * @param[in] to Destination of command.
+ * @param[in] pattern Format string for command arguments.
  */
 void sendcmdto_prio_one(struct Client *from, const char *cmd, const char *tok,
 			struct Client *to, const char *pattern, ...)
@@ -322,9 +363,54 @@ void sendcmdto_prio_one(struct Client *from, const char *cmd, const char *tok,
   msgq_clean(mb);
 }
 
-/*
- * Send a (prefixed) command to all servers but one, using tok; cmd
- * is ignored in this particular function.
+/**
+ * Send a (prefixed) command to all servers matching or not matching a
+ * flag but one.
+ * @param[in] from Client sending the command.
+ * @param[in] cmd Long name of command (ignored).
+ * @param[in] tok Short name of command.
+ * @param[in] one Client direction to skip (or NULL).
+ * @param[in] require Only send to servers with this Flag bit set.
+ * @param[in] forbid Do not send to servers with this Flag bit set.
+ * @param[in] pattern Format string for command arguments.
+ */
+void sendcmdto_flag_serv_butone(struct Client *from, const char *cmd,
+                                const char *tok, struct Client *one,
+                                int require, int forbid,
+                                const char *pattern, ...)
+{
+  struct VarData vd;
+  struct MsgBuf *mb;
+  struct DLink *lp;
+
+  vd.vd_format = pattern; /* set up the struct VarData for %v */
+  va_start(vd.vd_args, pattern);
+
+  /* use token */
+  mb = msgq_make(&me, "%C %s %v", from, tok, &vd);
+  va_end(vd.vd_args);
+
+  /* send it to our downlinks */
+  for (lp = cli_serv(&me)->down; lp; lp = lp->next) {
+    if (one && lp->value.cptr == cli_from(one))
+      continue;
+    if ((require < FLAG_LAST_FLAG) && !HasFlag(lp->value.cptr, require))
+      continue;
+    if ((forbid < FLAG_LAST_FLAG) && HasFlag(lp->value.cptr, forbid))
+      continue;
+    send_buffer(lp->value.cptr, mb, 0);
+  }
+
+  msgq_clean(mb);
+}
+
+/**
+ * Send a (prefixed) command to all servers but one.
+ * @param[in] from Client sending the command.
+ * @param[in] cmd Long name of command (ignored).
+ * @param[in] tok Short name of command.
+ * @param[in] one Client direction to skip (or NULL).
+ * @param[in] pattern Format string for command arguments.
  */
 void sendcmdto_serv_butone(struct Client *from, const char *cmd,
 			   const char *tok, struct Client *one,
@@ -351,26 +437,13 @@ void sendcmdto_serv_butone(struct Client *from, const char *cmd,
   msgq_clean(mb);
 }
 
-/*
- * Send a (prefix) command originating from <from> to all channels
- * <from> is locally on.  <from> must be a user. <tok> is ignored in
- * this function.
- *
- * Update: don't send to 'one', if any. --Vampire
+/** Safely increment the sentalong marker.
+ * This increments the sentalong marker.  Since new connections will
+ * have con_sentalong() == 0, and to avoid confusion when the counter
+ * wraps, we reset all sentalong markers to zero when the sentalong
+ * marker hits zero.
+ * @param[in,out] one Client to mark with new sentalong marker (if any).
  */
-/* XXX sentalong_marker used XXX
- *
- * There is not an easy way to revoke the need for sentalong_marker
- * from this function.  Thoughts and ideas would be welcome... -Kev
- *
- * One possibility would be to internalize the sentalong array; that
- * could be prohibitively big, though.  We could get around that by
- * making one that's the number of connected servers or something...
- * or perhaps by adding a special flag to the servers we've sent a
- * message to, and then a final loop through the connected servers
- * to delete the flag. -Kev
- */
-
 static void
 bump_sentalong(struct Client *one)
 {
@@ -386,9 +459,16 @@ bump_sentalong(struct Client *one)
     cli_sentalong(one) = sentalong_marker;
 }
 
+/** Send a (prefixed) command to all channels that \a from is on.
+ * @param[in] from Client originating the command.
+ * @param[in] cmd Long name of command.
+ * @param[in] tok Short name of command.
+ * @param[in] one Client direction to skip (or NULL).
+ * @param[in] pattern Format string for command arguments.
+ */
 void sendcmdto_common_channels_butone(struct Client *from, const char *cmd,
-                                     const char *tok, struct Client *one,
-                                     const char *pattern, ...)
+				      const char *tok, struct Client *one,
+				      const char *pattern, ...)
 {
   struct VarData vd;
   struct MsgBuf *mb;
@@ -416,13 +496,13 @@ void sendcmdto_common_channels_butone(struct Client *from, const char *cmd,
     if (IsZombie(chan) || IsDelayedJoin(chan))
       continue;
     for (member = chan->channel->members; member;
-         member = member->next_member)
+	 member = member->next_member)
       if (MyConnect(member->user)
           && -1 < cli_fd(cli_from(member->user))
           && member->user != one
           && cli_sentalong(member->user) != sentalong_marker) {
-        cli_sentalong(member->user) = sentalong_marker;
-        send_buffer(member->user, mb, 0);
+	cli_sentalong(member->user) = sentalong_marker;
+	send_buffer(member->user, mb, 0);
       }
   }
 
@@ -432,16 +512,18 @@ void sendcmdto_common_channels_butone(struct Client *from, const char *cmd,
   msgq_clean(mb);
 }
 
-/*
- * Send a (prefixed) command to all local users on the channel specified
- * by <to>; <tok> is ignored by this function
- *
- * Update: don't send to 'one', if any. --Vampire
+/** Send a (prefixed) command to all local users on a channel.
+ * @param[in] from Client originating the command.
+ * @param[in] cmd Long name of command.
+ * @param[in] tok Short name of command (ignored).
+ * @param[in] to Destination channel.
+ * @param[in] one Client direction to skip (or NULL).
+ * @param[in] skip Bitmask of SKIP_DEAF, SKIP_NONOPS, SKIP_NONVOICES indicating which clients to skip.
+ * @param[in] pattern Format string for command arguments.
  */
-
 void sendcmdto_channel_butserv_butone(struct Client *from, const char *cmd,
-                                      const char *tok, struct Channel *to,
-                                      struct Client *one, unsigned int skip,
+				      const char *tok, struct Channel *to,
+				      struct Client *one, unsigned int skip,
                                       const char *pattern, ...)
 {
   struct VarData vd;
@@ -462,8 +544,7 @@ void sendcmdto_channel_butserv_butone(struct Client *from, const char *cmd,
         || IsZombie(member)
         || (skip & SKIP_DEAF && IsDeaf(member->user))
         || (skip & SKIP_NONOPS && !IsChanOp(member))
-        || (skip & SKIP_NONHOPS && !IsChanOp(member) && !IsHalfop(member))
-        || (skip & SKIP_NONVOICES && !IsChanOp(member) && !IsHalfop(member) && !HasVoice(member)))
+        || (skip & SKIP_NONVOICES && !IsChanOp(member) && !HasVoice(member)))
         continue;
       send_buffer(member->user, mb, 0);
   }
@@ -471,11 +552,15 @@ void sendcmdto_channel_butserv_butone(struct Client *from, const char *cmd,
   msgq_clean(mb);
 }
 
-/*
- * Send a (prefixed) command to all servers with users on the channel
- * specified by <to>; <cmd> and <skip> are ignored by this function.
- *
- * XXX sentalong_marker used XXX
+/** Send a (prefixed) command to all servers with users on \a to.
+ * Skip \a from and \a one plus those indicated in \a skip.
+ * @param[in] from Client originating the command.
+ * @param[in] cmd Long name of command (ignored).
+ * @param[in] tok Short name of command.
+ * @param[in] to Destination channel.
+ * @param[in] one Client direction to skip (or NULL).
+ * @param[in] skip Bitmask of SKIP_NONOPS and SKIP_NONVOICES indicating which clients to skip.
+ * @param[in] pattern Format string for command arguments.
  */
 void sendcmdto_channel_servers_butone(struct Client *from, const char *cmd,
                                       const char *tok, struct Channel *to,
@@ -501,8 +586,7 @@ void sendcmdto_channel_servers_butone(struct Client *from, const char *cmd,
         || cli_fd(cli_from(member->user)) < 0
         || cli_sentalong(member->user) == sentalong_marker
         || (skip & SKIP_NONOPS && !IsChanOp(member))
-        || (skip & SKIP_NONHOPS && !IsChanOp(member) && !IsHalfop(member))
-        || (skip & SKIP_NONVOICES && !IsChanOp(member) && !IsHalfop(member) && !HasVoice(member)))
+        || (skip & SKIP_NONVOICES && !IsChanOp(member) && !HasVoice(member)))
       continue;
     cli_sentalong(member->user) = sentalong_marker;
     send_buffer(member->user, serv_mb, 0);
@@ -510,27 +594,21 @@ void sendcmdto_channel_servers_butone(struct Client *from, const char *cmd,
   msgq_clean(serv_mb);
 }
 
-/*
- * Send a (prefixed) command to all users on this channel, including
- * remote users; users to skip may be specified by setting appropriate
- * flags in the <skip> argument.  <one> will also be skipped.
- */
-/* XXX sentalong_marker used XXX
- *
- * We can drop sentalong_marker from this function by adding a field to
- * channels and to connections; what we do is make a user's connection
- * a "member" of the channel by adding it to the new list, and we use
- * the struct Membership status as a reference count.  Then, to implement
- * this function, we just walk the list of connections.  Unfortunately,
- * this doesn't account for sending only to channel ops, or for not
- * sending to +d users; we could account for that by splitting those
- * counts out, but that would imply adding two more fields (at least) to
- * the struct Membership... -Kev
+
+/** Send a (prefixed) command to all users on this channel, except for
+ * \a one and those matching \a skip.
+ * @param[in] from Client originating the command.
+ * @param[in] cmd Long name of command.
+ * @param[in] tok Short name of command.
+ * @param[in] to Destination channel.
+ * @param[in] one Client direction to skip (or NULL).
+ * @param[in] skip Bitmask of SKIP_NONOPS, SKIP_NONVOICES, SKIP_DEAF, SKIP_BURST.
+ * @param[in] pattern Format string for command arguments.
  */
 void sendcmdto_channel_butone(struct Client *from, const char *cmd,
-                              const char *tok, struct Channel *to,
-                              struct Client *one, unsigned int skip,
-                              const char *pattern, ...)
+			      const char *tok, struct Channel *to,
+			      struct Client *one, unsigned int skip,
+			      const char *pattern, ...)
 {
   struct Membership *member;
   struct VarData vd;
@@ -541,8 +619,8 @@ void sendcmdto_channel_butone(struct Client *from, const char *cmd,
 
   /* Build buffer to send to users */
   va_start(vd.vd_args, pattern);
-  user_mb = msgq_make(0, skip & (SKIP_NONOPS | SKIP_NONHOPS | SKIP_NONVOICES) ? "%:#C %s @%v" : "%:#C %s %v",
-     from, skip & (SKIP_NONOPS | SKIP_NONHOPS | SKIP_NONVOICES) ? MSG_NOTICE : cmd, &vd);
+  user_mb = msgq_make(0, skip & (SKIP_NONOPS | SKIP_NONVOICES) ? "%:#C %s @%v" : "%:#C %s %v",
+                      from, skip & (SKIP_NONOPS | SKIP_NONVOICES) ? MSG_NOTICE : cmd, &vd);
   va_end(vd.vd_args);
 
   /* Build buffer to send to servers */
@@ -557,14 +635,13 @@ void sendcmdto_channel_butone(struct Client *from, const char *cmd,
     if (IsZombie(member) ||
         (skip & SKIP_DEAF && IsDeaf(member->user)) ||
         (skip & SKIP_NONOPS && !IsChanOp(member)) ||
-        (skip & SKIP_NONHOPS && (!IsHalfop(member)) && !IsChanOp(member)) ||
-        (skip & SKIP_NONVOICES && !HasVoice(member) && !IsChanOp(member) && !IsHalfop(member)) ||
+        (skip & SKIP_NONVOICES && !IsChanOp(member) && !HasVoice(member)) ||
         (skip & SKIP_BURST && IsBurstOrBurstAck(cli_from(member->user))) ||
         cli_fd(cli_from(member->user)) < 0 ||
         cli_sentalong(member->user) == sentalong_marker)
       continue;
     cli_sentalong(member->user) = sentalong_marker;
-    
+
     if (MyConnect(member->user)) /* pick right buffer to send */
       send_buffer(member->user, user_mb, 0);
     else
@@ -575,9 +652,11 @@ void sendcmdto_channel_butone(struct Client *from, const char *cmd,
   msgq_clean(serv_mb);
 }
 
-/*
- * Send a (prefixed) command to all users except <one> that have
- * <flag> set.
+/** Send a (prefixed) WALL of type \a type to all users except \a one.
+ * @param[in] from Source of the command.
+ * @param[in] type One of WALL_DESYNCH, WALL_WALLOPS or WALL_WALLUSERS.
+ * @param[in] one Client direction to skip (or NULL).
+ * @param[in] pattern Format string for command arguments.
  */
 void sendwallto_group_butone(struct Client *from, int type, struct Client *one,
 			     const char *pattern, ...)
@@ -644,28 +723,19 @@ void sendwallto_group_butone(struct Client *from, int type, struct Client *one,
   msgq_clean(mb);
 }
 
-/*
- * Send a (prefixed) command to all users who match <to>, under control
- * of <who>
- */
-/* XXX sentalong_marker used XXX
- *
- * This is also a difficult one to solve.  The basic approach would be
- * to walk the client list of each connected server until we find a
- * match--but then, we also have to walk the client list of all the
- * servers behind that one.  We could implement this recursively--or we
- * could add (yet another) field to the connection struct that would be
- * a linked list of clients introduced through that link, and just walk
- * that, making this into an iterative implementation.  Unfortunately,
- * we probably would not be able to use tail recursion for the recursive
- * solution, so a deep network could exhaust our stack space; therefore
- * I favor the extra linked list, even though that increases the
- * complexity of the database. -Kev
+/** Send a (prefixed) command to all users matching \a to as \a who.
+ * @param[in] from Source of the command.
+ * @param[in] cmd Long name of command.
+ * @param[in] tok Short name of command.
+ * @param[in] to Destination host/server mask.
+ * @param[in] one Client direction to skip (or NULL).
+ * @param[in] who Type of match for \a to (either MATCH_HOST or MATCH_SERVER).
+ * @param[in] pattern Format string for command arguments.
  */
 void sendcmdto_match_butone(struct Client *from, const char *cmd,
-                            const char *tok, const char *to,
-                            struct Client *one, unsigned int who,
-                            const char *pattern, ...)
+			    const char *tok, const char *to,
+			    struct Client *one, unsigned int who,
+			    const char *pattern, ...)
 {
   struct VarData vd;
   struct Client *cptr;
@@ -688,8 +758,8 @@ void sendcmdto_match_butone(struct Client *from, const char *cmd,
   bump_sentalong(one);
   for (cptr = GlobalClientList; cptr; cptr = cli_next(cptr)) {
     if (!IsRegistered(cptr) || IsServer(cptr) ||
-        !match_it(from, cptr, to, who) || cli_fd(cli_from(cptr)) < 0 ||
-        cli_sentalong(cptr) == sentalong_marker)
+	!match_it(from, cptr, to, who) || cli_fd(cli_from(cptr)) < 0 ||
+	cli_sentalong(cptr) == sentalong_marker)
       continue; /* skip it */
     cli_sentalong(cptr) = sentalong_marker;
 
@@ -703,9 +773,11 @@ void sendcmdto_match_butone(struct Client *from, const char *cmd,
   msgq_clean(serv_mb);
 }
 
-/*
- * Send a server notice to all users subscribing to the indicated <mask>
- * except for <one>
+/** Send a server notice to all users subscribing to the indicated \a
+ * mask except for \a one.
+ * @param[in] one Client direction to skip (or NULL).
+ * @param[in] mask One of the SNO_* constants.
+ * @param[in] pattern Format string for server notice.
  */
 void sendto_opmask_butone(struct Client *one, unsigned int mask,
 			  const char *pattern, ...)
@@ -717,9 +789,12 @@ void sendto_opmask_butone(struct Client *one, unsigned int mask,
   va_end(vl);
 }
 
-/*
- * Send a server notice to all users subscribing to the indicated <mask>
- * except for <one> - Ratelimited 1 / 30sec
+/** Send a server notice to all users subscribing to the indicated \a
+ * mask except for \a one, rate-limited to once per 30 seconds.
+ * @param[in] one Client direction to skip (or NULL).
+ * @param[in] mask One of the SNO_* constants.
+ * @param[in,out] rate Pointer to the last time the message was sent.
+ * @param[in] pattern Format string for server notice.
  */
 void sendto_opmask_butone_ratelimited(struct Client *one, unsigned int mask,
 				      time_t *rate, const char *pattern, ...)
@@ -728,18 +803,21 @@ void sendto_opmask_butone_ratelimited(struct Client *one, unsigned int mask,
 
   if ((CurrentTime - *rate) < 30)
     return;
-  else 
+  else
     *rate = CurrentTime;
 
   va_start(vl, pattern);
   vsendto_opmask_butone(one, mask, pattern, vl);
   va_end(vl);
-    
 }
 
 
-/*
- * Same as above, except called with a variable argument list
+/** Send a server notice to all users subscribing to the indicated \a
+ * mask except for \a one.
+ * @param[in] one Client direction to skip (or NULL).
+ * @param[in] mask One of the SNO_* constants.
+ * @param[in] pattern Format string for server notice.
+ * @param[in] vl Argument list for format string.
  */
 void vsendto_opmask_butone(struct Client *one, unsigned int mask,
 			   const char *pattern, va_list vl)
@@ -760,11 +838,9 @@ void vsendto_opmask_butone(struct Client *one, unsigned int mask,
    * this is ok...
    */
   vd.vd_format = pattern;
-  //vd.vd_args = vl;
   va_copy(vd.vd_args, vl);
   mb = msgq_make(0, ":%s " MSG_NOTICE " * :*** Notice -- %v", cli_name(&me),
 		 &vd);
-  va_end(vd.vd_args);
 
   for (; opslist; opslist = opslist->next)
     if (opslist->value.cptr != one)
@@ -773,7 +849,38 @@ void vsendto_opmask_butone(struct Client *one, unsigned int mask,
   msgq_clean(mb);
 }
 
+/** Send a SNO to all opers
+ * @param[in] from Source of the command
+ * @param[in] mask One of the SNO_* constants.
+ * @param[in] pattern Format string for server notice.
+ */
 void sendto_allops(struct Client *from, unsigned int mask, const char *pattern, ...)
+{
+  va_list vl;
+
+  va_start(vl, pattern);
+  vsendto_allops_butserv(0, from, mask, pattern, vl);
+  va_end(vl);
+}
+
+/** Send a SNO to all opers
+ * @param[in] one Client direction to skip (or NULL).
+ * @param[in] from Source of the command
+ * @param[in] mask One of the SNO_* constants.
+ * @param[in] pattern Format string for server notice.
+ */
+void sendto_allops_butserv(struct Client *one, struct Client *from, unsigned int mask,
+				const char *pattern, ...)
+{
+  va_list vl;
+
+  va_start(vl, pattern);
+  vsendto_allops_butserv(one, from, mask, pattern, vl);
+  va_end(vl);
+}
+
+void vsendto_allops_butserv(struct Client *one, struct Client *from, unsigned int mask,
+			   const char *pattern, va_list vl)
 {
   struct VarData vd;
   struct MsgBuf *mb;
@@ -785,88 +892,31 @@ void sendto_allops(struct Client *from, unsigned int mask, const char *pattern, 
     i++;
 
   vd.vd_format = pattern;
+  va_copy(vd.vd_args, vl);
 
   /* send to local users */
   if(( opslist = opsarray[i]))
   {
-   va_start(vd.vd_args, pattern);
     mb = msgq_make(0, ":%s " MSG_NOTICE " * :*** Notice -- %v", cli_name(from),
 		 &vd);
 
     for (; opslist; opslist = opslist->next)
       send_buffer(opslist->value.cptr, mb, 0);
-    va_end(vd.vd_args);
 
     msgq_clean(mb);
   }
   if((lp = cli_serv(&me)->down)) {
     /* ask server to send notice to them users */
-    va_start(vd.vd_args, pattern);
     mb = msgq_make(&me, "%C " TOK_SNO " %d :%v", from, mask, &vd);
-    va_end(vd.vd_args);
     /* send buffer along! */
     for (lp = cli_serv(&me)->down; lp; lp = lp->next)
+    {
+       if (one && lp->value.cptr == cli_from(one))
+         continue;
       send_buffer(lp->value.cptr, mb, 1);
+    }
 
     msgq_clean(mb);
   }
 }
 
-void sendto_channels_inviso_join(struct Client *user)
-{
-	struct Membership *chan, *chan2;
-	struct Client *acptr;
-
-	for (chan = cli_user(user)->channel; chan; chan = chan->next_channel)
-	{
-		sendcmdto_channel_butserv_butone(user, CMD_JOIN, chan->channel, user, 0, "%H" ,  chan->channel);
-		if (IsChanOp(chan) && HasVoice(chan) && !IsHalfop(chan)) {
-			sendcmdto_channel_butserv_butone(&me, CMD_MODE, chan->channel, user, 0,
-        		"%H +ov %C %C", chan->channel, user, user);
-      		} else if (IsChanOp(chan) && IsHalfop(chan) && !HasVoice(chan)) {
-        		sendcmdto_channel_butserv_butone(&me, CMD_MODE, chan->channel, user, 0,
-        		"%H +oh %C %C", chan->channel, user, user);
-      		} else if (HasVoice(chan) && IsHalfop(chan) && !IsChanOp(chan)) {
-        		sendcmdto_channel_butserv_butone(&me, CMD_MODE, chan->channel, user, 0,
-        		"%H +hv %C %C", chan->channel, user, user);
-      		} else if (HasVoice(chan) && IsHalfop(chan) && IsChanOp(chan)) {
-        		sendcmdto_channel_butserv_butone(&me, CMD_MODE, chan->channel, user, 0,
-        		"%H +ohv %C %C %C", chan->channel, user, user, user);
-      		} else if (IsChanOp(chan) || IsHalfop(chan) || HasVoice(chan) ) {
-        		sendcmdto_channel_butserv_butone(&me, CMD_MODE, chan->channel, user, 0,
-        		"%H +%c %C", chan->channel, IsChanOp(chan) ? 'o' : (IsHalfop(chan) ? 'h' : 'v'), user);
-        	}
-		/* recherche des salons commum chez les ircops afin de refresh la nicklist */
-		for (acptr = GlobalClientList; acptr; acptr = cli_next(acptr))
-                {
-                        if(IsAnOper(acptr) && MyUser(acptr)) {
-                                for (chan2 = cli_user(acptr)->channel; chan2; chan2 = chan2->next_channel){
-                                        if(chan->channel == chan2->channel)
-                                                do_names(acptr,chan2->channel, NAMES_ALL|NAMES_EON);
-                                }
-                        }
-                }
-	}
-}
-
-void sendto_channels_inviso_part(struct Client *user)
-{
-	struct Membership *chan, *chan2;
-	struct Client *acptr;
-
-	sendcmdto_common_channels_butone(user, CMD_QUIT, user, ":%s", 
-		feature_bool(FEAT_HIS_NETSPLIT) ? "*.net *.split" : "Read error: Connection reset by peer");
-
-	for (chan = cli_user(user)->channel; chan; chan = chan->next_channel)
-	{
-		for (acptr = GlobalClientList; acptr; acptr = cli_next(acptr))
-        	{
-                	if(IsAnOper(acptr) && MyUser(acptr)) {
-				for (chan2 = cli_user(acptr)->channel; chan2; chan2 = chan2->next_channel){
-					if(chan->channel == chan2->channel)
-						do_names(acptr,chan2->channel, NAMES_ALL|NAMES_EON);
-				}
-			}
-		}
-        }
-}

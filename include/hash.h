@@ -15,8 +15,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: hash.h,v 1.1.1.1 2004/02/28 11:10:43 bugs Exp $
+ */
+/** @file
+ * @brief Hash table management APIs.
+ * @version $Id: hash.h,v 1.1.1.1 2005/10/01 17:26:52 progs Exp $
  */
 
 #ifndef INCLUDED_hash_h
@@ -24,12 +26,15 @@
 
 struct Client;
 struct Channel;
+struct StatDesc;
 
 /*
  * general defines
  */
 
-/* Now client and channel hash table must be of the same size */
+/** Size of client and channel hash tables.
+ * Both must be of the same size.
+ */
 #define HASHSIZE                32000
 
 /*
@@ -45,16 +50,24 @@ struct Channel;
  */
 
 /* Raw calls, expect a core if you pass a NULL or zero-length name */
+/** Search for a channel by name. */
 #define SeekChannel(name)       hSeekChannel((name))
+/** Search for any client by name. */
 #define SeekClient(name)        hSeekClient((name), ~0)
+/** Search for a registered user by name. */
 #define SeekUser(name)          hSeekClient((name), (STAT_USER))
+/** Search for a server by name. */
 #define SeekServer(name)        hSeekClient((name), (STAT_ME | STAT_SERVER))
 
 /* Safer macros with sanity check on name, WARNING: these are _macros_,
    no side effects allowed on <name> ! */
+/** Search for a channel by name. */
 #define FindChannel(name)       (BadPtr((name)) ? 0 : SeekChannel(name))
+/** Search for any client by name. */
 #define FindClient(name)        (BadPtr((name)) ? 0 : SeekClient(name))
+/** Search for a registered user by name. */
 #define FindUser(name)          (BadPtr((name)) ? 0 : SeekUser(name))
+/** Search for a server by name. */
 #define FindServer(name)        (BadPtr((name)) ? 0 : SeekServer(name))
 
 /*
@@ -75,5 +88,8 @@ extern int m_hash(struct Client *cptr, struct Client *sptr, int parc, char *parv
 extern int isNickJuped(const char *nick);
 extern int addNickJupes(const char *nicks);
 extern void clearNickJupes(void);
+extern void stats_nickjupes(struct Client* to, const struct StatDesc* sd,
+			    char* param);
+extern void list_next_channels(struct Client *cptr);
 
 #endif /* INCLUDED_hash_h */

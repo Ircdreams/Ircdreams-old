@@ -1,7 +1,6 @@
-/*
- * parse.h
- *
- * $Id: parse.h,v 1.2 2006/01/24 19:10:16 bugs Exp $
+/** @file parse.h
+ * @brief Declarations for parsing input from users and other servers.
+ * @version $Id: parse.h,v 1.1.1.1 2005/10/01 17:26:59 progs Exp $
  */
 #ifndef INCLUDED_parse_h
 #define INCLUDED_parse_h

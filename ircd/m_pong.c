@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_pong.c,v 1.3 2005/01/24 01:19:23 bugs Exp $
+ * $Id: m_pong.c,v 1.1.1.1 2005/10/01 17:28:05 progs Exp $
  */
 
 /*
@@ -79,11 +79,12 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "hash.h"
 #include "ircd.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "msg.h"
@@ -93,12 +94,12 @@
 #include "s_user.h"
 #include "send.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <string.h>
 #include <stdlib.h>
 
 /*
- * ms_pong - server message handler template
+ * ms_pong - server message handler
  *
  * parv[0] = sender prefix
  * parv[1] = origin
@@ -121,7 +122,8 @@ int ms_pong(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   ClrFlag(sptr, FLAG_PINGSENT);
   cli_lasttime(cptr) = CurrentTime;
 
-  if (parc > 5) {
+  if (parc > 5)
+  {
     /* AsLL pong */
     cli_serv(cptr)->asll_rtt = atoi(militime_float(parv[3]));
     cli_serv(cptr)->asll_to = atoi(parv[4]);
@@ -131,15 +133,17 @@ int ms_pong(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   
   if (EmptyString(destination))
     return 0;
-
-  if (*destination == '!') {
+  
+  if (*destination == '!')
+  {
     /* AsLL ping reply from a non-AsLL server */
     cli_serv(cptr)->asll_rtt = atoi(militime_float(destination + 1));
-  } else if (0 != ircd_strcmp(destination, cli_name(&me))) {
+  }
+  else if (0 != ircd_strcmp(destination, cli_name(&me)))
+  {
     struct Client* acptr;
-    if ((acptr = FindClient(destination))) {
+    if ((acptr = FindClient(destination)))
       sendcmdto_one(sptr, CMD_PONG, acptr, "%s %s", origin, destination);
-    }
   }
   return 0;
 }
@@ -166,7 +170,8 @@ int mr_pong(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   if (0 != cli_cookie(sptr) && COOKIE_VERIFIED != cli_cookie(sptr)) {
     if (parc > 1 && cli_cookie(sptr) == atol(parv[parc - 1])) {
       cli_cookie(sptr) = COOKIE_VERIFIED;
-      if (cli_user(sptr) && *(cli_user(sptr))->host && (cli_name(sptr))[0])
+      cli_unreg(sptr) &= ~CLIREG_COOKIE; /* cookie has been returned... */
+      if (!cli_unreg(sptr)) /* no more registration tasks... */
         /*
          * NICK and USER OK
          */
@@ -174,7 +179,7 @@ int mr_pong(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
     }
     else  
       send_reply(sptr, SND_EXPLICIT | ERR_BADPING,
-		 ":Pour vous connecter, tapez /QUOTE PONG %u", cli_cookie(sptr));
+		 ":To connect, type /QUOTE PONG %u", cli_cookie(sptr));
   }
   return 0;
 }

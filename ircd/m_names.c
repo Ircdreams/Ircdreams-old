@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_names.c,v 1.21 2005/06/14 04:38:18 bugs Exp $
+ * $Id: m_names.c,v 1.5 2006/04/29 19:59:05 romexzf Exp $
  */
 
 /*
@@ -79,12 +79,13 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "channel.h"
 #include "client.h"
 #include "hash.h"
 #include "ircd.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "msg.h"
@@ -92,8 +93,8 @@
 #include "numnicks.h"
 #include "s_user.h"
 #include "send.h"
- 
-#include <assert.h>
+
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <string.h>
 
 /*
@@ -108,16 +109,16 @@
  */
 
 void do_names(struct Client* sptr, struct Channel* chptr, int filter)
-{ 
+{
   int mlen;
   int idx;
   int flag;
-  int needs_space; 
-  int len; 
+  int needs_space;
+  int len;
   char buf[BUFSIZE];
   struct Client *c2ptr;
   struct Membership* member;
-  
+
   assert(chptr);
   assert(sptr);
   assert((filter&NAMES_ALL) != (filter&NAMES_VIS));
@@ -129,7 +130,7 @@ void do_names(struct Client* sptr, struct Channel* chptr, int filter)
     *buf = '=';
   else if (SecretChannel(chptr))
     *buf = '@';
- 
+
   len = strlen(chptr->chname);
   strcpy(buf + 2, chptr->chname);
   strcpy(buf + 2 + len, " :");
@@ -138,13 +139,13 @@ void do_names(struct Client* sptr, struct Channel* chptr, int filter)
   flag = 1;
   needs_space = 0;
 
-  if (!(ShowChannel(sptr, chptr) || IsAnOper(sptr))) /* Don't list private channels unless we are on them. */
+  if (!IsAnOper(sptr) && !ShowChannel(sptr, chptr)) /* Don't list private channels unless we are on them. */
     return;
 
   /* Iterate over all channel members, and build up the list. */
 
   mlen = strlen(cli_name(&me)) + 10 + strlen(cli_name(sptr));
-  
+
   for (member = chptr->members; member; member = member->next_member)
   {
     c2ptr = member->user;
@@ -152,75 +153,46 @@ void do_names(struct Client* sptr, struct Channel* chptr, int filter)
     if (((filter&NAMES_VIS)!=0) && IsInvisible(c2ptr))
       continue;
 
-    if (IsZombie(member) && (member->user != sptr))
+    if (IsZombie(member) && member->user != sptr)
       continue;
 
-    if (IsDelayedJoin(member) && !(filter & NAMES_DEL) && (c2ptr!=sptr))
-      continue;
+    if (IsDelayedJoin(member) && (member->user != sptr) && !(filter & NAMES_DEL))
+        continue;
 
-    if ((!IsDelayedJoin(member) || (c2ptr==sptr)) && (filter & NAMES_DEL))
-      continue;
+    if ((!IsDelayedJoin(member) || (member->user == sptr)) && (filter & NAMES_DEL))
+        continue;
 
-    if (IsHiding(c2ptr) && !IsAnOper(sptr))
-      continue;
+    if (needs_space) buf[idx++] = ' ';
 
-    if (needs_space) {
-    	strcat(buf, " ");
-      idx++;
-    }
     needs_space=1;
+    if (IsZombie(member)) buf[idx++] = '!';
+    else if (IsChanOp(member)) buf[idx++] = '@';
+    else if (HasVoice(member)) buf[idx++] = '+';
 
-    if (IsHiding(c2ptr) && IsAnOper(sptr))   
-    {   
-        strcat(buf, "~");   
-        strcat(buf, cli_name(c2ptr));   
-        idx++;   
-        continue;   
-    } 
-
-    if (IsZombie(member))
-    {
-      strcat(buf, "!");
-      idx++;
-    }
-    else if (IsChanOp(member))
-    {
-      strcat(buf, "@");
-      idx++;
-    }
-    else if (IsHalfop(member))
-    {
-      strcat(buf, "%");
-      idx++;
-    }
-    else if (HasVoice(member))
-    {
-      strcat(buf, "+");
-      idx++;
-    }
-    strcat(buf, cli_name(c2ptr));
+    strcpy(buf + idx, cli_name(c2ptr));
     idx += strlen(cli_name(c2ptr));
     flag = 1;
     if (mlen + idx + NICKLEN + 5 > BUFSIZE)
       /* space, modifier, nick, \r \n \0 */
-    { 
+    {
       send_reply(sptr, (filter & NAMES_DEL) ? RPL_DELNAMREPLY : RPL_NAMREPLY, buf);
       strcpy(buf, "* ");
       ircd_strncpy(buf + 2, chptr->chname, len + 1);
-      buf[len + 2] = 0;
-      strcat(buf, " :");
+      strcpy(buf + len + 2, " :");
+
       if (PubChannel(chptr))
         *buf = '=';
       else if (SecretChannel(chptr))
         *buf = '@';
+
       idx = len + 4;
       flag = 0;
-      needs_space=0;
+      needs_space = 0;
     }
   }
   if (flag)
     send_reply(sptr, (filter & NAMES_DEL) ? RPL_DELNAMREPLY : RPL_NAMREPLY, buf);
-  if (filter&NAMES_EON)
+  if (filter & NAMES_EON)
     send_reply(sptr, RPL_ENDOFNAMES, chptr->chname);
 }
 
@@ -233,22 +205,21 @@ void do_names(struct Client* sptr, struct Channel* chptr, int filter)
 
 int m_names(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 {
-  struct Channel *chptr; 
-  struct Channel *ch2ptr; 
+  struct Channel *chptr;
+  struct Channel *ch2ptr;
   struct Client *c2ptr;
-  struct Membership* member; 
+  struct Membership* member;
   char* s;
   char* para = parc > 1 ? parv[1] : 0;
-  int showingdelayed=0;
+  int showingdelayed = 0;
 
-  if (parc>1 && !ircd_strcmp(parv[1],"-D")) {
-    /* names -D */
-    para=(parc>2) ? parv[2] : 0;
-    showingdelayed=1;
-  }
-
-  if ((parc - showingdelayed) > 2 && hunt_server_cmd(sptr, CMD_NAMES, cptr, 1, "%s %C", 2+showingdelayed, parc, parv))
-    return 0; 
+  if (parc > 1 && !ircd_strcmp(parv[1], "-D")) {
+      para = (parc > 2) ? parv[2] : 0;
+      showingdelayed = 1;
+      if (parc > 3 && hunt_server_cmd(sptr, CMD_NAMES, cptr, 1, "%s %s %C", 3, parc, parv))
+         return 0;
+  } else if (parc > 2 && hunt_server_cmd(sptr, CMD_NAMES, cptr, 1, "%s %C", 2, parc, parv))
+    return 0;
 
   if (EmptyString(para)) {
     send_reply(sptr, RPL_ENDOFNAMES, "*");
@@ -256,41 +227,42 @@ int m_names(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   }
   else if (*para == '0')
     *para = '\0';
-  
-  s = strchr(para, ','); /* Recursively call m_names for each comma-seperated channel. Eww. */
+
+  s = strchr(para, ','); /* Recursively call m_names for each comma-separated channel. Eww. */
   if (s) {
-    parv[1+showingdelayed] = ++s;
+    *s++ = '\0';
+    parv[1+showingdelayed] = s;
     m_names(cptr, sptr, parc, parv);
   }
- 
+
   /*
-   * Special Case 1: "/names 0". 
-   * Full list as per RFC. 
+   * Special Case 1: "/names 0".
+   * Full list as per RFC.
    */
 
-  if (!*para) { 
-    int idx; 
+  if (!*para) {
+    int idx;
     int mlen;
     int flag;
     struct Channel *ch3ptr;
-    char buf[BUFSIZE]; 
+    char buf[BUFSIZE];
 
     mlen = strlen(cli_name(&me)) + 10 + strlen(cli_name(sptr));
 
-    /* List all visible channels/visible members */ 
+    /* List all visible channels/visible members */
 
     for (ch2ptr = GlobalChannelList; ch2ptr; ch2ptr = ch2ptr->next)
-    { 
-      if (!(ShowChannel(sptr, ch2ptr) || IsAnOper(sptr)))
-        continue;                 /* Don't show secret chans. */ 
+    {
+      if (!ShowChannel(sptr, ch2ptr))
+        continue;                 /* Don't show secret chans. */
 
-      if (find_channel_member(sptr, ch2ptr) || IsAnOper(sptr))
+      if (find_channel_member(sptr, ch2ptr))
       {
-        do_names(sptr, ch2ptr, NAMES_ALL); /* Full list if we're in this chan. */
-      } else { 
-        do_names(sptr, ch2ptr, NAMES_VIS);
+        do_names(sptr, ch2ptr, (showingdelayed?NAMES_DEL:0)|NAMES_ALL); /* Full list if we're in this chan. */
+      } else {
+        do_names(sptr, ch2ptr, (showingdelayed?NAMES_DEL:0)|NAMES_VIS);
       }
-    } 
+    }
 
     /* List all remaining users on channel '*' */
 
@@ -302,7 +274,7 @@ int m_names(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
     {
       int showflag = 0;
 
-      if (!IsUser(c2ptr) || !((sptr == c2ptr) || IsAnOper(sptr)))
+      if (!IsUser(c2ptr) || (sptr != c2ptr && IsInvisible(c2ptr)))
         continue;
 
       member = cli_user(c2ptr)->channel;
@@ -310,19 +282,20 @@ int m_names(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
       while (member)
       {
         ch3ptr = member->channel;
-  
-        if (PubChannel(ch3ptr) || find_channel_member(sptr, ch3ptr) || IsAnOper(sptr))
+
+        if (PubChannel(ch3ptr) || find_channel_member(sptr, ch3ptr))
           showflag = 1;
- 
+
         member = member->next_channel;
       }
 
       if (showflag)               /* Have we already shown them? */
         continue;
- 
-      strcat(buf, cli_name(c2ptr));
-      strcat(buf, " ");
-      idx += strlen(cli_name(c2ptr)) + 1;
+
+      strcpy(buf + idx, cli_name(c2ptr));
+      idx += strlen(cli_name(c2ptr));
+      buf[idx++] = ' ';
+      buf[idx] = 0;
       flag = 1;
 
       if (mlen + idx + NICKLEN + 3 > BUFSIZE)     /* space, \r\n\0 */
@@ -336,44 +309,43 @@ int m_names(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
     if (flag)
       send_reply(sptr, RPL_NAMREPLY, buf);
     send_reply(sptr, RPL_ENDOFNAMES, "*");
-    return 1; 
-  } 
+    return 1;
+  }
 
   /*
    *  Special Case 2: User is on this channel, requesting full names list.
    *  (As performed with each /join) - ** High frequency usage **
    */
 
-  clean_channelname(para);
-  chptr = FindChannel(para); 
+  chptr = FindChannel(para);
 
   if (chptr) {
     member = find_member_link(chptr, sptr);
-    if (member)
-    { 
-      do_names(sptr, chptr, showingdelayed?NAMES_DEL|NAMES_ALL:NAMES_ALL);
+    if (member || IsAnOper(sptr))
+    {
+      do_names(sptr, chptr, (showingdelayed?NAMES_DEL:0)|NAMES_ALL);
       if (!EmptyString(para))
       {
         send_reply(sptr, RPL_ENDOFNAMES, chptr ? chptr->chname : para);
         return 1;
       }
     }
-      else 
+      else
     {
       /*
-       *  Special Case 3: User isn't on this channel, show all visible users, in 
+       *  Special Case 3: User isn't on this channel, show all visible users, in
        *  non secret channels.
        */
-      do_names(sptr, chptr, (showingdelayed ? NAMES_VIS|NAMES_DEL : (IsAnOper(sptr) ? NAMES_ALL : NAMES_VIS)));
-      send_reply(sptr, RPL_ENDOFNAMES, para); 
-    } 
-  } else { /* Channel doesn't exist. */ 
-      send_reply(sptr, RPL_ENDOFNAMES, para); 
+      do_names(sptr, chptr, (showingdelayed?NAMES_DEL:0)|NAMES_VIS);
+      send_reply(sptr, RPL_ENDOFNAMES, para);
+    }
+  } else { /* Channel doesn't exist. */
+      send_reply(sptr, RPL_ENDOFNAMES, para);
   }
   return 1;
 }
 
- 
+
 /*
  * ms_names - server message handler
  *
@@ -382,15 +354,23 @@ int m_names(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
  */
 int ms_names(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 {
-  struct Channel *chptr; 
-  struct Channel *ch2ptr; 
+  struct Channel *chptr;
+  struct Channel *ch2ptr;
   struct Client *c2ptr;
-  struct Membership* member; 
+  struct Membership* member;
   char* s;
-  char* para = parc > 1 ? parv[1] : 0; 
+  char* para = parc > 1 ? parv[1] : 0;
+  int showingdelayed = 0;
 
-  if (parc > 2 && hunt_server_cmd(sptr, CMD_NAMES, cptr, 1, "%s %C", 2, parc, parv))
-    return 0; 
+  if (parc > 1 && !ircd_strcmp(parv[1], "-D"))
+  {
+     para = (parc > 2) ? parv[2] : 0;
+     showingdelayed = NAMES_DEL;
+     if (parc > 3 && hunt_server_cmd(sptr, CMD_NAMES, cptr, 1, "%s %s %C", 3, parc, parv))
+       return 0;
+  }
+  else if (parc > 2 && hunt_server_cmd(sptr, CMD_NAMES, cptr, 1, "%s %C", 2, parc, parv))
+    return 0;
 
   if (EmptyString(para)) {
     send_reply(sptr, RPL_ENDOFNAMES, "*");
@@ -398,42 +378,43 @@ int ms_names(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   }
   else if (*para == '0')
     *para = '\0';
-  
-  s = strchr(para, ','); /* Recursively call m_names for each comma-seperated channel. */
+
+  s = strchr(para, ','); /* Recursively call m_names for each comma-separated channel. */
   if (s) {
-    parv[1] = ++s;
+    *s++ = '\0';
+    parv[1+!!showingdelayed] = s;
     m_names(cptr, sptr, parc, parv);
   }
- 
+
   /*
    * Special Case 1: "/names 0".
-   * Full list as per RFC. 
+   * Full list as per RFC.
    */
 
-  if (!*para) { 
-    int idx; 
+  if (!*para) {
+    int idx;
     int mlen;
     int flag;
     struct Channel *ch3ptr;
-    char buf[BUFSIZE]; 
+    char buf[BUFSIZE];
 
     mlen = strlen(cli_name(&me)) + 10 + strlen(cli_name(sptr));
 
-    /* List all visible channels/visible members */ 
+    /* List all visible channels/visible members */
 
     for (ch2ptr = GlobalChannelList; ch2ptr; ch2ptr = ch2ptr->next)
-    { 
-      if (!(ShowChannel(sptr, ch2ptr) || IsAnOper(sptr)))
-        continue;                 /* Don't show secret chans. */ 
+    {
+      if (!ShowChannel(sptr, ch2ptr))
+        continue;                 /* Don't show secret chans. */
 
       if (find_channel_member(sptr, ch2ptr))
       {
-        do_names(sptr, ch2ptr, NAMES_ALL); /* Full list if we're in this chan. */
-      } else { 
-        do_names(sptr, ch2ptr, NAMES_VIS);
+        do_names(sptr, ch2ptr, showingdelayed|NAMES_ALL); /* Full list if we're in this chan. */
+      } else {
+        do_names(sptr, ch2ptr, showingdelayed|NAMES_VIS);
       }
-    } 
- 
+    }
+
     /* List all remaining users on channel '*' */
 
     strcpy(buf, "* * :");
@@ -444,27 +425,28 @@ int ms_names(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
     {
       int showflag = 0;
 
-      if (!IsUser(c2ptr) || (sptr != c2ptr && (IsInvisible(c2ptr) && !IsAnOper(sptr))))
+      if (!IsUser(c2ptr) || (sptr != c2ptr && IsInvisible(c2ptr)))
         continue;
 
-      member = cli_user(c2ptr)->channel; 
+      member = cli_user(c2ptr)->channel;
 
       while (member)
       {
         ch3ptr = member->channel;
-  
-        if (PubChannel(ch3ptr) || find_channel_member(sptr, ch3ptr) || IsAnOper(sptr))
+
+        if (PubChannel(ch3ptr) || find_channel_member(sptr, ch3ptr))
           showflag = 1;
- 
+
         member = member->next_channel;
       }
 
       if (showflag)               /* Have we already shown them? */
         continue;
- 
-      strcat(buf, cli_name(c2ptr));
-      strcat(buf, " ");
-      idx += strlen(cli_name(c2ptr)) + 1;
+
+      strcpy(buf + idx, cli_name(c2ptr));
+      idx += strlen(cli_name(c2ptr));
+      buf[idx++] = ' ';
+      buf[idx] = 0;
       flag = 1;
 
       if (mlen + idx + NICKLEN + 3 > BUFSIZE)     /* space, \r\n\0 */
@@ -478,36 +460,34 @@ int ms_names(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
     if (flag)
       send_reply(sptr, RPL_NAMREPLY, buf);
     send_reply(sptr, RPL_ENDOFNAMES, "*");
-    return 1; 
-  } 
+    return 1;
+  }
 
   /*
    *  Special Case 2: User is on this channel, requesting full names list.
    *  (As performed with each /join) - ** High frequency usage **
    */
 
-  clean_channelname(para);
-  chptr = FindChannel(para); 
+  chptr = FindChannel(para);
 
   if (chptr) {
     member = find_member_link(chptr, sptr);
-    if (member)
-    { 
-      do_names(sptr, chptr, NAMES_ALL);
+    if (member || IsAnOper(sptr))
+    {
+      do_names(sptr, chptr, showingdelayed|NAMES_ALL);
       if (!EmptyString(para))
       {
         send_reply(sptr, RPL_ENDOFNAMES, chptr ? chptr->chname : para);
         return 1;
       }
     }
-      else 
+      else
     {
       /*
-       *  Special Case 3: User isn't on this channel, show all visible users, in 
+       *  Special Case 3: User isn't on this channel, show all visible users, in
        *  non secret channels.
-       */ 
-      do_names(sptr, chptr, IsAnOper(sptr) ? NAMES_ALL : NAMES_VIS);
-      send_reply(sptr, RPL_ENDOFNAMES, para); 
+       */
+      do_names(sptr, chptr, showingdelayed|NAMES_VIS);
     }
   } else { /* Channel doesn't exist. */
       send_reply(sptr, RPL_ENDOFNAMES, para);

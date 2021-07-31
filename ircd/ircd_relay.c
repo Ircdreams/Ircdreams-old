@@ -19,10 +19,31 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: ircd_relay.c,v 1.25 2005/11/28 02:47:38 bugs Exp $
  */
-#include "../config.h"
+/** @file
+ * @brief Helper functions to relay various types of messages.
+ * @version $Id: ircd_relay.c,v 1.4 2006/09/20 22:12:42 progs Exp $
+ *
+ * There are four basic types of messages, each with four subtypes.
+ *
+ * The basic types are: channel, directed, masked, and private.
+ * Channel messages are (perhaps obviously) sent directly to a
+ * channel.  Directed messages are sent to "NICK[%host]@server", but
+ * only allowed if the server is a services server (to avoid
+ * information leaks for normal clients).  Masked messages are sent to
+ * either *@*host.mask or *.server.mask.  Private messages are sent to
+ * NICK.
+ *
+ * The subtypes for each type are: client message, client notice,
+ * server message, and server notice.  Client subtypes are sent by a
+ * local user, and server subtypes are given to us by a server.
+ * Notice subtypes correspond to the NOTICE command, and message
+ * subtypes correspond to the PRIVMSG command.
+ *
+ * As a special note, directed messages do not have server subtypes,
+ * since there is no difference in handling them based on origin.
+ */
+#include "config.h"
 
 #include "ircd_relay.h"
 #include "channel.h"
@@ -31,9 +52,9 @@
 #include "ircd.h"
 #include "ircd_chattr.h"
 #include "ircd_features.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
-#include "ircd_defs.h"
 #include "match.h"
 #include "msg.h"
 #include "numeric.h"
@@ -43,100 +64,10 @@
 #include "s_user.h"
 #include "send.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h> 
-
-#define iswseperator(c) ((u_char)c == 32) /* recherche des espaces */
-
-char *our_strcasestr(char *haystack, char *needle) {
-int i;
-int nlength = strlen (needle);
-int hlength = strlen (haystack);
-
-        if (nlength > hlength) return NULL;
-        if (hlength <= 0) return NULL;
-        if (nlength <= 0) return haystack;
-        for (i = 0; i <= (hlength - nlength); i++) {
-                if (strncasecmp (haystack + i, needle, nlength) == 0)
-                        return haystack + i;
-        }
-  return NULL; /* not found */
-}
-
-/* Fonction str_replace a été repris de unreal.
- * Elle a biensur été modifié pour les besoins
- * BuGs <bugs@ircdreams.org>
- */
-
-inline int str_replace(char *badword, char *line, char *buf, int max)
-{
-	char *replacew = REPLACEWORD;
-	char *pold = line, *pnew = buf;
-	char *poldx = line;
-	int replacen = -1;
-	int searchn = -1;
-	char *startw, *endw;
-	char *c_eol = buf + max - 1;
-	int run = 1;
-	int cleaned = 0;
-
-	while(run) {
-                pold = our_strcasestr(pold, badword);
-                if (!pold)
-                        break;
-                if (replacen == -1)
-                        replacen = strlen(replacew);
-                if (searchn == -1)
-                        searchn = strlen(badword);
-                /* Hunt for start of word */
-		if (pold > line) {
-                        for (startw = pold; (!iswseperator(*startw) && (startw != line)); startw--);
-                        if (iswseperator(*startw))
-                                startw++; /* Don't point at the space/seperator but at the word! */
-                }
-		else startw = pold;
-
-		for (endw = pold; ((*endw != '\0') && (!iswseperator(*endw))); endw++);
-
-                cleaned = 1; /* still too soon? Syzop/20050227 */
-
-                if (poldx != startw) {
-                        int tmp_n = startw - poldx;
-                        if (pnew + tmp_n >= c_eol) {
-                                /* Partial copy and return... */
-                                memcpy(pnew, poldx, c_eol - pnew);
-                                *c_eol = '\0';
-                                return 1;
-                        }
-
-                        memcpy(pnew, poldx, tmp_n);
-                        pnew += tmp_n;
-                }
-
-                if (replacen) {
-	                if ((pnew + replacen) >= c_eol) {
-                                /* Partial copy and return... */
-                                memcpy(pnew, replacew, c_eol - pnew);
-                                *c_eol = '\0';
-                                return 1;
-                        }
-                        memcpy(pnew, replacew, replacen);
-                        pnew += replacen;
-                }
-                poldx = pold = endw;
-        }
-
-        if (*poldx) {
-                strncpy(pnew, poldx, c_eol - pnew);
-                *(c_eol) = '\0';
-        } else {
-                *pnew = '\0';
-        }
-        return cleaned;
-}
 
 /*
  * This file contains message relaying functions for client and server
@@ -146,50 +77,15 @@ inline int str_replace(char *badword, char *line, char *buf, int max)
  * but not introduce any IsOper/IsUser/MyUser/IsServer etc. stuff.
  */
 
-/* nouveau code du +c , suppression du code des couleurs du texte */
-
-#define IS_DIGIT(x) (x >= '0' && x <= '9')
-#define IS_NDIGIT(x) (x < '0' || x > '9')
-const char* TextStripColour(const char* text)
-{
-  static char stripped[BUFSIZE];
-      const char *src;
-      char *dest;
-      
-       dest = stripped;
-             for (src = text; (*src); src++) {
-                 switch (*src) {
-                   default:
-                     *dest++ = *src;
-                    case COLOUR_BOLD:
-                    case COLOUR_REVERSE:
-                    case COLOUR_UNDERLINE:
-                    case COLOUR_NORMAL:
-                       break;
-                    case COLOUR_COLOUR:
-                       if ( IS_NDIGIT(src[1]) ) break;
-                       src++;
-                       if ( IS_DIGIT(src[1]) ) src++;
-                       if ( src[1]==',' && IS_DIGIT(src[2]) ) src+=2;
-                       else break;
-                       if ( IS_DIGIT(src[1]) ) src++;
-                       break;
-                   }
-              }
-              *dest = '\0';
-              return (const char*) stripped;
-}
-#undef IS_DIGIT
-#undef IS_NDIGIT
-
-void relay_channel_message(struct Client* sptr, const char* name, const char* text, int total)
+/** Relay a local user's message to a channel.
+ * Generates an error if the client cannot send to the channel.
+ * @param[in] sptr Client that originated the message.
+ * @param[in] name Name of target channel.
+ * @param[in] text %Message to relay.
+ */
+void relay_channel_message(struct Client* sptr, const char* name, const char* text)
 {
   struct Channel* chptr;
-  struct Membership* chan;
-  const char *ch;
-  char finaltext[514];
-  char final[514];
-  int i, ctcp = 0, n= 0;
   assert(0 != sptr);
   assert(0 != name);
   assert(0 != text);
@@ -201,117 +97,27 @@ void relay_channel_message(struct Client* sptr, const char* name, const char* te
   /*
    * This first: Almost never a server/service
    */
-  if (!client_can_send_to_channel(sptr, chptr, 1)) {
+  if (!client_can_send_to_channel(sptr, chptr, 1, text)) {
     send_reply(sptr, ERR_CANNOTSENDTOCHAN, chptr->chname);
     return;
   }
-  if ((chptr->mode.mode & MODE_NOPRIVMSGS) && check_target_limit(sptr, chptr, chptr->chname, 0))
+  if ((chptr->mode.mode & MODE_NOPRIVMSGS) &&
+      check_target_limit(sptr, chptr, chptr->chname, 0))
     return;
-
-  chan = find_member_link(chptr, sptr);
-
-  if ((chptr->mode.mode & MODE_NOAMSG) && (total > 1) && !IsProtect(sptr) && !IsChannelService(sptr) &&
-	!is_chan_op(sptr,chptr) && !is_halfop(sptr,chptr)) {
-    send_reply(sptr, ERR_NOMULTITARGET, chptr->chname);
-    return;
-  }
-
-  /* +cC checks
-   * nouveau code du +c qui permet de supprimé la couleur du texte
-   * j'ai autorisé également la couleur au mode +Z, @ et %
-   */
-
-  if ((chptr->mode.mode & MODE_NOCOLOUR) && !IsProtect(sptr) && !IsChannelService(sptr) &&
-	!is_chan_op(sptr,chptr) && !is_halfop(sptr,chptr))
-    text = TextStripColour(text);
-
-  if ((chptr->mode.mode & MODE_NOCTCP) && ircd_strncmp(text,"\001ACTION ",8) && !IsProtect(sptr) && !is_chan_op(sptr,chptr))
-    for (ch=text;*ch;)
-      if (*ch++==1) {
-        send_reply(sptr, ERR_CANNOTSENDTOCHAN, chptr->chname);
-        return;
-      }
-
-  ircd_strncpy(finaltext,text, BUFSIZE);
-
-  if (finaltext[0]==1) ctcp=1;
-  if ((chptr->mode.mode & MODE_NOCAPS) && !IsProtect(sptr) && !IsChannelService(sptr) && 
-	!is_chan_op(sptr,chptr) && !is_halfop(sptr,chptr))
-  {
-  	for (i=0; i<strlen(finaltext); i++)
-        {
-        	if (ctcp==0)
-              	{
-                	if(finaltext[i]=='É')
-                  	finaltext[i]='é';
-                	else if(finaltext[i]=='È')
-                  	finaltext[i]='è';
-                	else if(finaltext[i]=='Ê')
-                  	finaltext[i]='ê';
-                	else if(finaltext[i]=='Ë')
-                  	finaltext[i]='ë';
-                	else if(finaltext[i]=='Î')
-                  	finaltext[i]='î';
-                	else if(finaltext[i]=='Ï')
-                  	finaltext[i]='ï';
-                	else if(finaltext[i]=='Â')
-                  	finaltext[i]='â';
-                	else if(finaltext[i]=='À')
-                  	finaltext[i]='à';
-                	else if(finaltext[i]=='Ä')
-                  	finaltext[i]='ä';
-                	else if(finaltext[i]=='Ç')
-                	finaltext[i]='ç';
-                	else if(finaltext[i]=='Û')
-                  	finaltext[i]='û';
-                	else if(finaltext[i]=='Ü')
-                  	finaltext[i]='ü';
-                	else if(finaltext[i]=='Ù')
-                  	finaltext[i]='ù';
-                	else if(finaltext[i]=='Ô')
-                  	finaltext[i]='ô';
-                	else if(finaltext[i]=='Ö')
-                  	finaltext[i]='ö';
-                	else if(finaltext[i]=='´')
-                  	finaltext[i]='¸';
-                	else if(finaltext[i]=='¾')
-                  	finaltext[i]='ÿ';
-                	else if(finaltext[i]=='¦')
-                  	finaltext[i]='¨';
-			else
-                  	finaltext[i]=tolower(finaltext[i]);
-              	}
-              	else
-                	if (finaltext[i]==32) ctcp=0;
-        }
-            	finaltext[i]=0;
-  }
-
-  if ((chptr->mode.mode & MODE_NOCHANPUB) && !IsProtect(sptr) && !IsChannelService(sptr) && 
-		!is_chan_op(sptr,chptr) && !is_halfop(sptr,chptr)) {
-  	n= str_replace("#", finaltext, final, BUFSIZE);
-  	ircd_strncpy(finaltext, final, BUFSIZE);
-  }
-  
-  if ((chptr->mode.mode & MODE_NOWEBPUB) && !IsProtect(sptr) && !IsChannelService(sptr) && 
-		!is_chan_op(sptr,chptr) && !is_halfop(sptr,chptr)) {
-	n= str_replace("www.", finaltext, final, BUFSIZE);
-	ircd_strncpy(finaltext, final, BUFSIZE);
-	n= str_replace("http:", finaltext, final, BUFSIZE);
-	ircd_strncpy(finaltext, final, BUFSIZE);
-  }
 
   sendcmdto_channel_butone(sptr, CMD_PRIVATE, chptr, cli_from(sptr),
-			   SKIP_DEAF | SKIP_BURST, "%H :%s", chptr, finaltext);
+			   SKIP_DEAF | SKIP_BURST, "%H :%s", chptr, text);
 }
 
-void relay_channel_notice(struct Client* sptr, const char* name, const char* text, int total)
+/** Relay a local user's notice to a channel.
+ * Silently exits if the client cannot send to the channel.
+ * @param[in] sptr Client that originated the message.
+ * @param[in] name Name of target channel.
+ * @param[in] text %Message to relay.
+ */
+void relay_channel_notice(struct Client* sptr, const char* name, const char* text)
 {
   struct Channel* chptr;
-  const char *ch;
-  char final[514];
-  char finaltext[514];
-  int i, ctcp = 0, n= 0;
   assert(0 != sptr);
   assert(0 != name);
   assert(0 != text);
@@ -321,109 +127,30 @@ void relay_channel_notice(struct Client* sptr, const char* name, const char* tex
   /*
    * This first: Almost never a server/service
    */
-  if (!client_can_send_to_channel(sptr, chptr, 1))
+  if (!client_can_send_to_channel(sptr, chptr, 1, text))
     return;
 
   if ((chptr->mode.mode & MODE_NOPRIVMSGS) &&
       check_target_limit(sptr, chptr, chptr->chname, 0))
     return;
-
-  if((chptr->mode.mode & MODE_NONOTICE) && !IsAnOper(sptr) && !is_chan_op(sptr,chptr))
-  {
+	
+	if ((chptr->mode.mode & MODE_NONOTICE) && !(IsServer(sptr) || (IsAnOper(sptr) && IsProtected(sptr)) || IsChannelService(sptr)))
+	{
     send_reply(sptr, ERR_CANNOTSENDTOCHAN, chptr->chname);
     return;
   }
 
-  if ((chptr->mode.mode & MODE_NOAMSG) && (total > 1) && !IsProtect(sptr) && !IsChannelService(sptr) &&
-        !is_chan_op(sptr,chptr) && !is_halfop(sptr,chptr)) {
-    send_reply(sptr, ERR_NOMULTITARGET, chptr->chname);
-    return;
-  }
-
-  /* +cC checks */
-  if (chptr->mode.mode & MODE_NOCOLOUR && !IsProtect(sptr) && !IsChannelService(sptr) && !is_chan_op(sptr,chptr))
-    text = TextStripColour(text);
-    
-  if ((chptr->mode.mode & MODE_NOCTCP) && ircd_strncmp(text,"\001ACTION ",8) && !IsProtect(sptr) && !is_chan_op(sptr,chptr))
-    for (ch=text;*ch;)
-      if (*ch++==1) {
-        send_reply(sptr, ERR_CANNOTSENDTOCHAN, chptr->chname);
-        return;
-      }
-
-  ircd_strncpy(finaltext,text, BUFSIZE);
-
-  if (finaltext[0]==1) ctcp=1;
-  if ((chptr->mode.mode & MODE_NOCAPS) && !IsProtect(sptr) && !IsChannelService(sptr) &&
-        !is_chan_op(sptr,chptr) && !is_halfop(sptr,chptr))
-  {
-        for (i=0; i<strlen(finaltext); i++)
-        {
-                if (ctcp==0)
-                {
-                        if(finaltext[i]=='É')
-                        finaltext[i]='é';
-                        else if(finaltext[i]=='È')
-                        finaltext[i]='è';
-                        else if(finaltext[i]=='Ê')
-                        finaltext[i]='ê';
-                        else if(finaltext[i]=='Ë')
-                        finaltext[i]='ë';
-                        else if(finaltext[i]=='Î')
-                        finaltext[i]='î';
-                        else if(finaltext[i]=='Ï')
-                        finaltext[i]='ï';
-                        else if(finaltext[i]=='Â')
-                        finaltext[i]='â';
-                        else if(finaltext[i]=='À')
-                        finaltext[i]='à';
-                        else if(finaltext[i]=='Ä')
-                        finaltext[i]='ä';
-                        else if(finaltext[i]=='Ç')
-                        finaltext[i]='ç';
-                        else if(finaltext[i]=='Û')
-                        finaltext[i]='û';
-                        else if(finaltext[i]=='Ü')
-                        finaltext[i]='ü';
-                        else if(finaltext[i]=='Ù')
-                        finaltext[i]='ù';
-                        else if(finaltext[i]=='Ô')
-                        finaltext[i]='ô';
-                        else if(finaltext[i]=='Ö')
-                        finaltext[i]='ö';
-                        else if(finaltext[i]=='´')
-                        finaltext[i]='¸';
-                        else if(finaltext[i]=='¾')
-                        finaltext[i]='ÿ';
-                        else if(finaltext[i]=='¦')
-                        finaltext[i]='¨';
-                        else
-                        finaltext[i]=tolower(finaltext[i]);
-                }
-                else
-                        if (finaltext[i]==32) ctcp=0;
-        }
-                finaltext[i]=0;
-  }
-
-  if ((chptr->mode.mode & MODE_NOCHANPUB) && !IsProtect(sptr) && !IsChannelService(sptr) &&
-                !is_chan_op(sptr,chptr) && !is_halfop(sptr,chptr)) {
-        n= str_replace("#", finaltext, final, BUFSIZE);
-        ircd_strncpy(finaltext, final, BUFSIZE);
-  }
-
-  if ((chptr->mode.mode & MODE_NOWEBPUB) && !IsProtect(sptr) && !IsChannelService(sptr) &&
-                !is_chan_op(sptr,chptr) && !is_halfop(sptr,chptr)) {
-        n= str_replace("www.", finaltext, final, BUFSIZE);
-        ircd_strncpy(finaltext, final, BUFSIZE);
-        n= str_replace("http:", finaltext, final, BUFSIZE);
-        ircd_strncpy(finaltext, final, BUFSIZE);
-  }
-
   sendcmdto_channel_butone(sptr, CMD_NOTICE, chptr, cli_from(sptr),
-			   SKIP_DEAF | SKIP_BURST, "%H :%s", chptr, finaltext);
+			   SKIP_DEAF | SKIP_BURST, "%H :%s", chptr, text);
 }
 
+/** Relay a message to a channel.
+ * Generates an error if the client cannot send to the channel,
+ * or if the channel is a local channel
+ * @param[in] sptr Client that originated the message.
+ * @param[in] name Name of target channel.
+ * @param[in] text %Message to relay.
+ */
 void server_relay_channel_message(struct Client* sptr, const char* name, const char* text)
 {
   struct Channel* chptr;
@@ -431,10 +158,7 @@ void server_relay_channel_message(struct Client* sptr, const char* name, const c
   assert(0 != name);
   assert(0 != text);
 
-  if (0 == (chptr = FindChannel(name))) {
-    /*
-     * XXX - do we need to send this back from a remote server?
-     */
+  if (IsLocalChannel(name) || 0 == (chptr = FindChannel(name))) {
     send_reply(sptr, ERR_NOSUCHCHANNEL, name);
     return;
   }
@@ -442,7 +166,7 @@ void server_relay_channel_message(struct Client* sptr, const char* name, const c
    * This first: Almost never a server/service
    * Servers may have channel services, need to check for it here
    */
-  if (client_can_send_to_channel(sptr, chptr, 1) || IsChannelService(sptr)) {
+  if (client_can_send_to_channel(sptr, chptr, 1, text) || IsChannelService(sptr)) {
     sendcmdto_channel_butone(sptr, CMD_PRIVATE, chptr, cli_from(sptr),
 			     SKIP_DEAF | SKIP_BURST, "%H :%s", chptr, text);
   }
@@ -450,6 +174,13 @@ void server_relay_channel_message(struct Client* sptr, const char* name, const c
     send_reply(sptr, ERR_CANNOTSENDTOCHAN, chptr->chname);
 }
 
+/** Relay a notice to a channel.
+ * Generates an error if the client cannot send to the channel,
+ * or if the channel is a local channel
+ * @param[in] sptr Client that originated the message.
+ * @param[in] name Name of target channel.
+ * @param[in] text %Message to relay.
+ */
 void server_relay_channel_notice(struct Client* sptr, const char* name, const char* text)
 {
   struct Channel* chptr;
@@ -457,19 +188,27 @@ void server_relay_channel_notice(struct Client* sptr, const char* name, const ch
   assert(0 != name);
   assert(0 != text);
 
-  if (0 == (chptr = FindChannel(name)))
+  if (IsLocalChannel(name) || 0 == (chptr = FindChannel(name)))
     return;
   /*
    * This first: Almost never a server/service
    * Servers may have channel services, need to check for it here
    */
-  if (client_can_send_to_channel(sptr, chptr, 1) || IsChannelService(sptr)) {
+  if (client_can_send_to_channel(sptr, chptr, 1, text) || IsChannelService(sptr)) {
     sendcmdto_channel_butone(sptr, CMD_NOTICE, chptr, cli_from(sptr),
 			     SKIP_DEAF | SKIP_BURST, "%H :%s", chptr, text);
   }
 }
 
-
+/** Relay a directed message.
+ * Generates an error if the named server does not exist, if it is not
+ * a services server, or if \a name names a local user and a hostmask
+ * is specified but does not match.
+ * @param[in] sptr Client that originated the message.
+ * @param[in] name Target nickname, with optional "%hostname" suffix.
+ * @param[in] server Name of target server.
+ * @param[in] text %Message to relay.
+ */
 void relay_directed_message(struct Client* sptr, char* name, char* server, const char* text)
 {
   struct Client* acptr;
@@ -480,19 +219,16 @@ void relay_directed_message(struct Client* sptr, char* name, char* server, const
   assert(0 != text);
   assert(0 != server);
 
-  if ((acptr = FindServer(server + 1)) == NULL 
-#if 0
-/* X doesn't say it's a service yet! */
-      || !IsService(acptr)
-#endif
-      ) {
+  if ((acptr = FindServer(server + 1)) == NULL || !IsService(acptr))
+  {
     send_reply(sptr, ERR_NOSUCHNICK, name);
     return;
   }
   /*
    * NICK[%host]@server addressed? See if <server> is me first
    */
-  if (!IsMe(acptr)) {
+  if (!IsMe(acptr))
+  {
     sendcmdto_one(sptr, CMD_PRIVATE, acptr, "%s :%s", name, text);
     return;
   }
@@ -508,14 +244,15 @@ void relay_directed_message(struct Client* sptr, char* name, char* server, const
   /* As reported by Vampire-, it's possible to brute force finding users
    * by sending a message to each server and see which one succeeded.
    * This means we have to remove error reporting.  Sigh.  Better than
-   * removing the ability to send directed messages to client servers 
+   * removing the ability to send directed messages to client servers
    * Thanks for the suggestion Vampire=.  -- Isomer 2001-08-28
    * Argh, /ping nick@server, disallow messages to non +k clients :/  I hate
    * this. -- Isomer 2001-09-16
    */
   if (!(acptr = FindUser(name)) || !MyUser(acptr) ||
-      (!EmptyString(host) && 0 != match(host, cli_user(acptr)->crypt)) ||
-      !IsChannelService(acptr)) {
+      (!EmptyString(host) && 0 != match(host, cli_user(acptr)->host)) ||
+      !IsChannelService(acptr))
+  {
     /*
      * By this stage we might as well not bother because they will
      * know that this server is currently linked because of the
@@ -533,6 +270,15 @@ void relay_directed_message(struct Client* sptr, char* name, char* server, const
     sendcmdto_one(sptr, CMD_PRIVATE, acptr, "%s :%s", name, text);
 }
 
+/** Relay a directed notice.
+ * Generates an error if the named server does not exist, if it is not
+ * a services server, or if \a name names a local user and a hostmask
+ * is specified but does not match.
+ * @param[in] sptr Client that originated the message.
+ * @param[in] name Target nickname, with optional "%hostname" suffix.
+ * @param[in] server Name of target server.
+ * @param[in] text %Message to relay.
+ */
 void relay_directed_notice(struct Client* sptr, char* name, char* server, const char* text)
 {
   struct Client* acptr;
@@ -562,7 +308,7 @@ void relay_directed_notice(struct Client* sptr, char* name, char* server, const 
     *host++ = '\0';
 
   if (!(acptr = FindUser(name)) || !MyUser(acptr) ||
-      (!EmptyString(host) && 0 != match(host, cli_user(acptr)->crypt)))
+      (!EmptyString(host) && 0 != match(host, cli_user(acptr)->host)))
     return;
 
   *server = '@';
@@ -573,6 +319,14 @@ void relay_directed_notice(struct Client* sptr, char* name, char* server, const 
     sendcmdto_one(sptr, CMD_NOTICE, acptr, "%s :%s", name, text);
 }
 
+/** Relay a private message from a local user.
+ * Returns an error if the user does not exist or sending to him would
+ * exceed the source's free targets.  Sends an AWAY status message if
+ * the target is marked as away.
+ * @param[in] sptr Client that originated the message.
+ * @param[in] name Nickname of target user.
+ * @param[in] text %Message to relay.
+ */
 void relay_private_message(struct Client* sptr, const char* name, const char* text)
 {
   struct Client* acptr;
@@ -590,18 +344,6 @@ void relay_private_message(struct Client* sptr, const char* name, const char* te
       is_silenced(sptr, acptr))
     return;
 
-  if(IsHiding(acptr) && !IsAnOper(sptr))
-  {
-    send_reply(sptr, ERR_NOSUCHNICK, name);
-    return;
-  }
-
-  if((IsNoPrivate(acptr) && !IsAnOper(sptr)) || (IsPAccOnly(acptr) && !IsAccount(sptr) && !IsAnOper(sptr)))
-  {
-     send_reply(sptr, ERR_CANTSENDPRIVATE, name);
-     return;
-  }
-
   /*
    * send away message if user away
    */
@@ -616,6 +358,14 @@ void relay_private_message(struct Client* sptr, const char* name, const char* te
   sendcmdto_one(sptr, CMD_PRIVATE, acptr, "%C :%s", acptr, text);
 }
 
+/** Relay a private notice from a local user.
+ * Returns an error if the user does not exist or sending to him would
+ * exceed the source's free targets.  Sends an AWAY status message if
+ * the target is marked as away.
+ * @param[in] sptr Client that originated the message.
+ * @param[in] name Nickname of target user.
+ * @param[in] text %Message to relay.
+ */
 void relay_private_notice(struct Client* sptr, const char* name, const char* text)
 {
   struct Client* acptr;
@@ -625,17 +375,10 @@ void relay_private_notice(struct Client* sptr, const char* name, const char* tex
 
   if (0 == (acptr = FindUser(name)))
     return;
-  if ((!IsChannelService(acptr) && 
+  if ((!IsChannelService(acptr) &&
        check_target_limit(sptr, acptr, cli_name(acptr), 0)) ||
       is_silenced(sptr, acptr))
     return;
-
-  if(IsHiding(acptr) && !IsAnOper(sptr))
-  {
-    send_reply(sptr, ERR_NOSUCHNICK, name);
-    return;
-  }
-
   /*
    * deliver the message
    */
@@ -645,6 +388,12 @@ void relay_private_notice(struct Client* sptr, const char* name, const char* tex
   sendcmdto_one(sptr, CMD_NOTICE, acptr, "%C :%s", acptr, text);
 }
 
+/** Relay a private message that arrived from a server.
+ * Returns an error if the user does not exist.
+ * @param[in] sptr Client that originated the message.
+ * @param[in] name Nickname of target user.
+ * @param[in] text %Message to relay.
+ */
 void server_relay_private_message(struct Client* sptr, const char* name, const char* text)
 {
   struct Client* acptr;
@@ -656,7 +405,8 @@ void server_relay_private_message(struct Client* sptr, const char* name, const c
    */
   if (0 == (acptr = findNUser(name)) || !IsUser(acptr)) {
     send_reply(sptr, SND_EXPLICIT | ERR_NOSUCHNICK, "* :Target left %s. "
-	       "Failed to deliver: [%.20s]", feature_str(FEAT_NETWORK), text);
+	       "Failed to deliver: [%.20s]", feature_str(FEAT_NETWORK),
+               text);
     return;
   }
   if (is_silenced(sptr, acptr))
@@ -669,6 +419,12 @@ void server_relay_private_message(struct Client* sptr, const char* name, const c
 }
 
 
+/** Relay a private notice that arrived from a server.
+ * Returns an error if the user does not exist.
+ * @param[in] sptr Client that originated the message.
+ * @param[in] name Nickname of target user.
+ * @param[in] text %Message to relay.
+ */
 void server_relay_private_notice(struct Client* sptr, const char* name, const char* text)
 {
   struct Client* acptr;
@@ -690,6 +446,13 @@ void server_relay_private_notice(struct Client* sptr, const char* name, const ch
   sendcmdto_one(sptr, CMD_NOTICE, acptr, "%C :%s", acptr, text);
 }
 
+/** Relay a masked message from a local user.
+ * Sends an error response if there is no top-level domain label in \a
+ * mask, or if that TLD contains a wildcard.
+ * @param[in] sptr Client that originated the message.
+ * @param[in] mask Target mask for the message.
+ * @param[in] text %Message to relay.
+ */
 void relay_masked_message(struct Client* sptr, const char* mask, const char* text)
 {
   const char* s;
@@ -725,6 +488,13 @@ void relay_masked_message(struct Client* sptr, const char* mask, const char* tex
 			 "%s :%s", mask, text);
 }
 
+/** Relay a masked notice from a local user.
+ * Sends an error response if there is no top-level domain label in \a
+ * mask, or if that TLD contains a wildcard.
+ * @param[in] sptr Client that originated the message.
+ * @param[in] mask Target mask for the message.
+ * @param[in] text %Message to relay.
+ */
 void relay_masked_notice(struct Client* sptr, const char* mask, const char* text)
 {
   const char* s;
@@ -760,6 +530,11 @@ void relay_masked_notice(struct Client* sptr, const char* mask, const char* text
 			 "%s :%s", mask, text);
 }
 
+/** Relay a masked message that arrived from a server.
+ * @param[in] sptr Client that originated the message.
+ * @param[in] mask Target mask for the message.
+ * @param[in] text %Message to relay.
+ */
 void server_relay_masked_message(struct Client* sptr, const char* mask, const char* text)
 {
   const char* s = mask;
@@ -778,6 +553,11 @@ void server_relay_masked_message(struct Client* sptr, const char* mask, const ch
 			 "%s :%s", mask, text);
 }
 
+/** Relay a masked notice that arrived from a server.
+ * @param[in] sptr Client that originated the message.
+ * @param[in] mask Target mask for the message.
+ * @param[in] text %Message to relay.
+ */
 void server_relay_masked_notice(struct Client* sptr, const char* mask, const char* text)
 {
   const char* s = mask;
@@ -795,3 +575,4 @@ void server_relay_masked_notice(struct Client* sptr, const char* mask, const cha
 			 host_mask ? MATCH_HOST : MATCH_SERVER,
 			 "%s :%s", mask, text);
 }
+

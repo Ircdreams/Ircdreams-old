@@ -15,10 +15,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: uping.c,v 1.2 2005/01/24 01:19:24 bugs Exp $
  */
-#include "../config.h"
+/** @file
+ * @brief UDP ping implementation.
+ * @version $Id: uping.c,v 1.1.1.1 2005/10/01 17:28:41 progs Exp $
+ */
+#include "config.h"
 
 #include "uping.h"
 #include "client.h"
@@ -40,8 +42,7 @@
 #include "send.h"
 #include "sys.h"
 
-#include <arpa/inet.h>
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <errno.h>
 #include <netdb.h>
 #include <stdio.h>
@@ -51,27 +52,22 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#define UPINGTIMEOUT 60   /* Timeout waiting for ping responses */
+#define UPINGTIMEOUT 60   /**< Timeout waiting for ping responses */
 
-#ifndef INADDR_NONE
-#define INADDR_NONE 0xffffffff
-#endif
+static struct UPing* pingList = 0; /**< Linked list of UPing structs */
+static struct Socket upingSock_v4; /**< Socket struct for IPv4 upings */
+static struct Socket upingSock_v6; /**< Socket struct for IPv6 upings */
 
-static struct UPing* pingList = 0;
-int UPingFileDescriptor       = -1; /* UDP listener socket for upings */
-
-static struct Socket upingSock;
-
-/*
- * pings_begin - iterator function for ping list 
+/** Start iteration of uping list.
+ * @return Start of uping list.
  */
 struct UPing* uping_begin(void)
 {
   return pingList;
 }
 
-/*
- * pings_erase - removes ping struct from ping list
+/** Removes \a p from uping list.
+ * @param[in,out] p UPing to remove from list.
  */
 static void uping_erase(struct UPing* p)
 {
@@ -79,7 +75,7 @@ static void uping_erase(struct UPing* p)
   struct UPing* last = 0;
 
   assert(0 != p);
-  
+
   for (it = pingList; it; last = it, it = it->next) {
     if (p == it) {
       if (last)
@@ -91,101 +87,84 @@ static void uping_erase(struct UPing* p)
   }
 }
 
-/* Called when the event engine detects activity on the UPing socket */
+/** Callback for uping listener socket.
+ * Reads a uping from the socket and respond, but not more than 10
+ * times per second.
+ * @param[in] ev I/O event for uping socket.
+ */
 static void uping_echo_callback(struct Event* ev)
 {
-  assert(ev_type(ev) == ET_READ || ev_type(ev) == ET_ERROR);
-
-  uping_echo();
-}
-
-/*
- * Setup a UDP socket and listen for incoming packets
- */
-int uping_init(void)
-{
-  struct sockaddr_in from = { 0 };
-  int fd;
-
-  memset(&from, 0, sizeof(from));
-  from.sin_addr = VirtualHost.sin_addr;
-  from.sin_port = htons(atoi(UDP_PORT));
-  from.sin_family = AF_INET;
-
-  if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
-    Debug((DEBUG_ERROR, "UPING: UDP listener socket call failed: %s", 
-           (strerror(errno)) ? strerror(errno) : "Unknown error"));
-    return -1;
-  }
-  if (!os_set_reuseaddr(fd)) {
-    log_write(LS_SOCKET, L_ERROR, 0,
-	      "UPING: set reuseaddr on UDP listener failed: %m (fd %d)", fd);
-    Debug((DEBUG_ERROR, "UPING: set reuseaddr on UDP listener failed: %s",
-           (strerror(errno)) ? strerror(errno) : "Unknown error"));
-    close(fd);
-    return -1;
-  }
-  if (bind(fd, (struct sockaddr*) &from, sizeof(from)) == -1) {
-    log_write(LS_SOCKET, L_ERROR, 0,
-	      "UPING: bind on UDP listener (%d fd %d) failed: %m",
-	      htons(from.sin_port), fd);
-    Debug((DEBUG_ERROR, "UPING: bind on UDP listener failed : %s",
-           (strerror(errno)) ? strerror(errno) : "Unknown error"));
-    close(fd);
-    return -1;
-  }
-  if (!os_set_nonblocking(fd)) {
-    Debug((DEBUG_ERROR, "UPING: set non-blocking: %s",
-           (strerror(errno)) ? strerror(errno) : "Unknown error"));
-    close(fd);
-    return -1;
-  }
-  if (!socket_add(&upingSock, uping_echo_callback, 0, SS_DATAGRAM,
-		  SOCK_EVENT_READABLE, fd)) {
-    Debug((DEBUG_ERROR, "UPING: Unable to queue fd to event system"));
-    close(fd);
-    return -1;
-  }
-  UPingFileDescriptor = fd;
-  return fd;
-}
-
-
-/*
- * max # of pings set to 15/sec.
- */
-void uping_echo()
-{
-  struct sockaddr_in from = { 0 };
+  struct Socket      *sock;
+  struct irc_sockaddr from;
   unsigned int       len = 0;
   static time_t      last = 0;
   static int         counter = 0;
   char               buf[BUFSIZE + 1];
 
+  assert(ev_type(ev) == ET_READ || ev_type(ev) == ET_ERROR);
+  sock = ev_socket(ev);
+  assert(sock == &upingSock_v4 || sock == &upingSock_v6);
+
   Debug((DEBUG_DEBUG, "UPING: uping_echo"));
 
-  if (IO_SUCCESS != os_recvfrom_nonb(UPingFileDescriptor, buf, BUFSIZE, &len, &from))
+  if (IO_SUCCESS != os_recvfrom_nonb(s_fd(sock), buf, BUFSIZE, &len, &from))
     return;
   /*
    * count em even if we're getting flooded so we can tell we're getting
    * flooded.
    */
   ++ServerStats->uping_recv;
-  if (CurrentTime == last) {
-    if (++counter > 10)
-      return;
-  }
-  else {
-    counter = 0;
-    last    = CurrentTime;
-  }
   if (len < 19)
     return;
-  sendto(UPingFileDescriptor, buf, len, 0, (struct sockaddr*) &from, sizeof(from));
+  else if (CurrentTime != last) {
+    counter = 0;
+    last = CurrentTime;
+  } else if (++counter > 10)
+    return;
+  os_sendto_nonb(s_fd(sock), buf, len, NULL, 0, &from);
+}
+
+/** Initialize a UDP socket for upings.
+ * @returns 0 on success, -1 on error.
+ */
+int uping_init(void)
+{
+  struct irc_sockaddr from;
+  int fd;
+
+  memcpy(&from, &VirtualHost_v4, sizeof(from));
+  from.port = atoi(UDP_PORT);
+
+  fd = os_socket(&from, SOCK_DGRAM, "IPv4 uping listener");
+  if (fd < 0)
+    return -1;
+  if (!socket_add(&upingSock_v4, uping_echo_callback, 0, SS_DATAGRAM,
+                  SOCK_EVENT_READABLE, fd)) {
+    Debug((DEBUG_ERROR, "UPING: Unable to queue fd to event system"));
+    close(fd);
+    return -1;
+  }
+
+  memcpy(&from, &VirtualHost_v6, sizeof(from));
+  from.port = atoi(UDP_PORT);
+
+  fd = os_socket(&from, SOCK_DGRAM, "IPv6 uping listener");
+  if (fd < 0)
+    return -1;
+  if (!socket_add(&upingSock_v6, uping_echo_callback, 0, SS_DATAGRAM,
+                  SOCK_EVENT_READABLE, fd)) {
+    Debug((DEBUG_ERROR, "UPING: Unable to queue fd to event system"));
+    close(fd);
+    return -1;
+  }
+
+  return 0;
 }
 
 
-/* Callback when socket has data to read */
+/** Callback for socket activity on an outbound uping socket.
+ * @param[in] ev I/O event for socket.
+ */
 static void uping_read_callback(struct Event* ev)
 {
   struct UPing *pptr;
@@ -193,7 +172,7 @@ static void uping_read_callback(struct Event* ev)
   assert(0 != ev_socket(ev));
   assert(0 != s_data(ev_socket(ev)));
 
-  pptr = s_data(ev_socket(ev));
+  pptr = (struct UPing*) s_data(ev_socket(ev));
 
   Debug((DEBUG_SEND, "uping_read_callback called, %p (%d)", pptr,
 	 ev_type(ev)));
@@ -210,7 +189,9 @@ static void uping_read_callback(struct Event* ev)
   }
 }
 
-/* Callback to send another ping */
+/** Timer callback to send another outbound uping.
+ * @param[in] ev Event for uping timer.
+ */
 static void uping_sender_callback(struct Event* ev)
 {
   struct UPing *pptr;
@@ -218,7 +199,7 @@ static void uping_sender_callback(struct Event* ev)
   assert(0 != ev_timer(ev));
   assert(0 != t_data(ev_timer(ev)));
 
-  pptr = t_data(ev_timer(ev));
+  pptr = (struct UPing*) t_data(ev_timer(ev));
 
   Debug((DEBUG_SEND, "uping_sender_callback called, %p (%d)", pptr,
 	 ev_type(ev)));
@@ -239,7 +220,9 @@ static void uping_sender_callback(struct Event* ev)
   }
 }
 
-/* Callback to kill a ping */
+/** Timer callback to stop upings.
+ * @param[in] ev Event for uping expiration.
+ */
 static void uping_killer_callback(struct Event* ev)
 {
   struct UPing *pptr;
@@ -247,7 +230,7 @@ static void uping_killer_callback(struct Event* ev)
   assert(0 != ev_timer(ev));
   assert(0 != t_data(ev_timer(ev)));
 
-  pptr = t_data(ev_timer(ev));
+  pptr = (struct UPing*) t_data(ev_timer(ev));
 
   Debug((DEBUG_SEND, "uping_killer_callback called, %p (%d)", pptr,
 	 ev_type(ev)));
@@ -264,8 +247,9 @@ static void uping_killer_callback(struct Event* ev)
   }
 }
 
-/*
- * start_ping
+/** Start a uping.
+ * This sets up the timers, UPing flags, and sends a notice to the
+ * requesting client.
  */
 static void uping_start(struct UPing* pptr)
 {
@@ -283,9 +267,8 @@ static void uping_start(struct UPing* pptr)
   pptr->active = 1;
 }
 
-/*
- * uping_send
- *
+/** Send a uping to another server.
+ * @param[in] pptr Descriptor for uping.
  */
 void uping_send(struct UPing* pptr)
 {
@@ -298,15 +281,14 @@ void uping_send(struct UPing* pptr)
   memset(buf, 0, sizeof(buf));
 
   gettimeofday(&tv, NULL);
-  sprintf(buf, " %10lu%c%6lu", tv.tv_sec, '\0', tv.tv_usec);
+  sprintf(buf, " %10lu%c%6lu", (unsigned long)tv.tv_sec, '\0', (unsigned long)tv.tv_usec);
 
   Debug((DEBUG_SEND, "send_ping: sending [%s %s] to %s.%d on %d",
 	  buf, &buf[12],
-          ircd_ntoa((const char*) &pptr->sin.sin_addr), ntohs(pptr->sin.sin_port),
+          ircd_ntoa(&pptr->addr.addr), pptr->addr.port,
 	  pptr->fd));
 
-  if (sendto(pptr->fd, buf, BUFSIZE, 0, (struct sockaddr*) &pptr->sin,
-             sizeof(struct sockaddr_in)) != BUFSIZE)
+  if (os_sendto_nonb(pptr->fd, buf, BUFSIZE, NULL, 0, &pptr->addr) != IO_SUCCESS)
   {
     const char* msg = strerror(errno);
     if (!msg)
@@ -321,12 +303,12 @@ void uping_send(struct UPing* pptr)
   ++pptr->sent;
 }
 
-/*
- * read_ping
+/** Read the response from an outbound uping.
+ * @param[in] pptr UPing to check.
  */
 void uping_read(struct UPing* pptr)
 {
-  struct sockaddr_in sin;
+  struct irc_sockaddr sin;
   struct timeval     tv;
   unsigned int       len;
   unsigned int       pingtime;
@@ -349,11 +331,11 @@ void uping_read(struct UPing* pptr)
 		  "%s", pptr->client, msg);
     uping_end(pptr);
     return;
-  }    
+  }
 
   if (len < 19)
     return;			/* Broken packet */
-   
+
   ++pptr->received;
 
   buf[len] = 0;
@@ -376,15 +358,23 @@ void uping_read(struct UPing* pptr)
   return;
 }
 
+/** Start sending upings to a server.
+ * @param[in] sptr Client requesting the upings.
+ * @param[in] aconf ConfItem containing the address to ping.
+ * @param[in] port Port number to ping.
+ * @param[in] count Number of times to ping (should be at least 20).
+ * @return Zero.
+ */
 int uping_server(struct Client* sptr, struct ConfItem* aconf, int port, int count)
 {
   int fd;
   struct UPing* pptr;
+  struct irc_sockaddr *local;
 
   assert(0 != sptr);
   assert(0 != aconf);
 
-  if (INADDR_NONE == aconf->ipnum.s_addr) {
+  if (!irc_in_addr_valid(&aconf->address.addr)) {
     sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :UPING: Host lookup failed for "
 		  "%s", sptr, aconf->name);
     return 0;
@@ -393,18 +383,11 @@ int uping_server(struct Client* sptr, struct ConfItem* aconf, int port, int coun
   if (IsUPing(sptr))
     uping_cancel(sptr, sptr);  /* Cancel previous ping request */
 
-  if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
-    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :UPING: Unable to create udp "
-		  "ping socket", sptr);
+  local = irc_in_addr_is_ipv4(&aconf->address.addr) ? &VirtualHost_v4 : &VirtualHost_v6;
+  fd = os_socket(local, SOCK_DGRAM, "Outbound uping socket");
+  if (fd < 0)
     return 0;
-  }
 
-  if (!os_set_nonblocking(fd)) {
-    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :UPING: Can't set fd non-"
-		  "blocking", sptr);
-    close(fd);
-    return 0;
-  }
   pptr = (struct UPing*) MyMalloc(sizeof(struct UPing));
   assert(0 != pptr);
   memset(pptr, 0, sizeof(struct UPing));
@@ -419,12 +402,10 @@ int uping_server(struct Client* sptr, struct ConfItem* aconf, int port, int coun
   }
 
   pptr->fd                  = fd;
-  pptr->sin.sin_port        = htons(port);
-  pptr->sin.sin_addr.s_addr = aconf->ipnum.s_addr;
-  pptr->sin.sin_family      = AF_INET;
+  memcpy(&pptr->addr.addr, &aconf->address.addr, sizeof(pptr->addr.addr));
+  pptr->addr.port           = port;
   pptr->count               = IRCD_MIN(20, count);
   pptr->client              = sptr;
-  pptr->index               = -1;
   pptr->freeable            = UPING_PENDING_SOCKET;
   strcpy(pptr->name, aconf->name);
 
@@ -436,7 +417,9 @@ int uping_server(struct Client* sptr, struct ConfItem* aconf, int port, int coun
   return 0;
 }
 
-
+/** Clean up a UPing structure, reporting results to the requester.
+ * @param[in,out] pptr UPing results.
+ */
 void uping_end(struct UPing* pptr)
 {
   Debug((DEBUG_DEBUG, "uping_end: %p", pptr));
@@ -472,12 +455,16 @@ void uping_end(struct UPing* pptr)
     timer_del(&pptr->killer);
 }
 
+/** Change notifications for any upings by \a sptr.
+ * @param[in] sptr Client to stop notifying.
+ * @param[in] acptr New client to notify (or NULL).
+ */
 void uping_cancel(struct Client *sptr, struct Client* acptr)
 {
   struct UPing* ping;
   struct UPing* ping_next;
 
-  Debug((DEBUG_DEBUG, "UPING: cancelling uping for %s", cli_name(sptr)));
+  Debug((DEBUG_DEBUG, "UPING: canceling uping for %s", cli_name(sptr)));
   for (ping = pingList; ping; ping = ping_next) {
     ping_next = ping->next;
     if (sptr == ping->client) {

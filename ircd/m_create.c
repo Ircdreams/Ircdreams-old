@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_create.c,v 1.3 2005/01/24 01:52:33 bugs Exp $
+ * $Id: m_create.c,v 1.2 2005/12/24 14:50:40 progs Exp $
  */
 
 /*
@@ -79,12 +79,13 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "channel.h"
 #include "client.h"
 #include "hash.h"
 #include "ircd.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "msg.h"
@@ -95,7 +96,7 @@
 #include "s_user.h"
 #include "send.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <stdlib.h>
 #include <string.h>
 
@@ -125,52 +126,80 @@ int ms_create(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   /* A create that didn't appear during a burst has that servers idea of
    * the current time.  Use it for lag calculations.
    */
-  if (!IsBurstOrBurstAck(sptr) && 0 != chanTS &&
-      MAGIC_REMOTE_JOIN_TS != chanTS)
+  if (!IsBurstOrBurstAck(sptr) && 0 != chanTS)
     cli_serv(cli_user(sptr)->server)->lag = TStime() - chanTS;
 
   /* If this server is >1 minute fast, warn */
-  if (TStime() - chanTS<-60) {
+  if (TStime() - chanTS<-60)
+  {
     static time_t rate;
     sendto_opmask_butone_ratelimited(0, SNO_NETWORK, &rate,
-				     "Timestamp drift from %C (%is); issuing "
-				     "SETTIME to correct this",
+                                     "Timestamp drift from %C (%is); issuing "
+                                     "SETTIME to correct this",
 				     cli_user(sptr)->server,
 				     chanTS - TStime());
     /* Now issue a SETTIME to resync.  If we're in the wrong, our
      * (RELIABLE_CLOCK) hub will bounce a SETTIME back to us.
      */
     sendcmdto_prio_one(&me, CMD_SETTIME, cli_user(sptr)->server,
-		       "%Tu %C", TStime(), cli_user(sptr)->server);
+                       "%Tu %C", TStime(), cli_user(sptr)->server);
   }
 
   joinbuf_init(&join, sptr, cptr, JOINBUF_TYPE_JOIN, 0, 0);
   joinbuf_init(&create, sptr, cptr, JOINBUF_TYPE_CREATE, 0, chanTS);
 
-  /* For each channel in the comma seperated list: */
+  /* For each channel in the comma separated list: */
   for (name = ircd_strtok(&p, parv[1], ","); name;
        name = ircd_strtok(&p, 0, ",")) {
     badop = 0;
 
-    if ((chptr = FindChannel(name))) {
-      name = chptr->chname;
+    if (IsLocalChannel(name))
+      continue;
+
+    if ((chptr = FindChannel(name)))
+    {
+      /* Is the remote server confused? */
+      if (find_member_link(chptr, sptr)) {
+        protocol_violation(sptr, "%s tried to CREATE a channel already joined", cli_name(sptr));
+        continue;
+      }
 
       /* Check if we need to bounce a mode */
       if (TStime() - chanTS > TS_LAG_TIME ||
 	  (chptr->creationtime && chanTS > chptr->creationtime &&
-	   chptr->creationtime != MAGIC_REMOTE_JOIN_TS)) {
+           /* Accept CREATE for zannels. This is only really necessary on a network
+              with servers prior to 2.10.12.02: we just accept their TS and ignore
+              the fact that it was a zannel. The influence of this on a network
+              that is completely 2.10.12.03 or higher is neglectable: Normally
+              a server only sends a CREATE after first sending a DESTRUCT. Thus,
+              by receiving a CREATE for a zannel one of two things happened:
+              1. The DESTRUCT was sent during a net.break; this could mean that
+                 our zannel is at the verge of expiring too, it should have been
+                 destructed. It is correct to copy the newer TS now, all modes
+                 already have been reset, so it will be as if it was destructed
+                 and immediately recreated. In order to avoid desyncs of modes,
+                 we don't accept a CREATE for channels that have +A set.
+              2. The DESTRUCT passed, then someone created the channel on our
+                 side and left it again. In this situation we have a near
+                 simultaneous creation on two servers; the person on our side
+                 already left within the time span of a message propagation.
+                 The channel will therefore be less than 48 hours old and no
+                 'protection' is necessary.
+            */
+           !(chptr->users == 0 && !chptr->mode.apass[0]))) {
 	modebuf_init(&mbuf, sptr, cptr, chptr,
 		     (MODEBUF_DEST_SERVER |  /* Send mode to server */
 		      MODEBUF_DEST_HACK2  |  /* Send a HACK(2) message */
 		      MODEBUF_DEST_BOUNCE)); /* And bounce the mode */
 
-	modebuf_mode_client(&mbuf, MODE_ADD | MODE_CHANOP, sptr);
+	modebuf_mode_client(&mbuf, MODE_ADD | MODE_CHANOP, sptr, MAXOPLEVEL + 1);
 
 	modebuf_flush(&mbuf);
 
 	badop = 1;
       }
-    } else                        /* Channel doesn't exist: create it */
+    }
+    else /* Channel doesn't exist: create it */
       chptr = get_channel(sptr, name, CGT_CREATE);
 
     if (!badop) /* Set/correct TS */

@@ -1,28 +1,4 @@
 dnl
-dnl Macro: unet_PIPE_CFLAGS
-dnl
-dnl   If the compiler understands -pipe, add it to CFLAGS if not already
-dnl   there.
-dnl
-AC_DEFUN(unet_PIPE_CFLAGS,
-[AC_MSG_CHECKING([if the compiler understands -pipe])
-unet_cv_pipe_flags="$ac_cv_prog_gcc"
-if test "$ac_cv_prog_gcc" = no; then
-  OLDCFLAGS="$CFLAGS"
-  CFLAGS="$CFLAGS -pipe"
-  AC_TRY_COMPILE(,,unet_cv_pipe_flags=yes,)
-  CFLAGS="$OLDCFLAGS"
-fi
-AC_MSG_RESULT($unet_cv_pipe_flags)
-if test "$unet_cv_pipe_flags" = yes ; then
-  x=`echo $CFLAGS | grep 'pipe' 2>/dev/null`
-  if test "$x" = "" ; then
-    CFLAGS="$CFLAGS -pipe"
-  fi
-fi
-])
-
-dnl
 dnl Macro: unet_NONBLOCKING
 dnl
 dnl   Check whether we have posix, bsd or sysv non-blocking sockets and
@@ -55,7 +31,7 @@ int main(void)
   exit(1);
 }], unet_cv_sys_nonblocking_posix=yes, unet_cv_sys_nonblocking_posix=no)])
 if test $unet_cv_sys_nonblocking_posix = yes; then
-  AC_DEFINE(NBLOCK_POSIX)
+  AC_DEFINE([NBLOCK_POSIX],,[Define if you have POSIX non-blocking sockets.])
 else
 AC_CACHE_CHECK([for bsd non-blocking], unet_cv_sys_nonblocking_bsd,
 [AC_TRY_RUN([#include <sys/types.h>
@@ -82,9 +58,9 @@ int main(void)
   exit(1);
 }], unet_cv_sys_nonblocking_bsd=yes, unet_cv_sys_nonblocking_bsd=no)])
 if test $unet_cv_sys_nonblocking_bsd = yes; then
-  AC_DEFINE(NBLOCK_BSD)
+  AC_DEFINE([NBLOCK_BSD],,[Define if you have BSD non-blocking sockets.])
 else
-  AC_DEFINE(NBLOCK_SYSV)
+  AC_DEFINE([NBLOCK_SYSV],,[Define if you have SysV non-blocking sockets.])
 fi
 fi])
 
@@ -102,7 +78,7 @@ AC_CACHE_CHECK([for posix signals], unet_cv_sys_signal_posix,
 [sigaction(SIGTERM, (struct sigaction *)0L, (struct sigaction *)0L)],
 unet_cv_sys_signal_posix=yes, unet_cv_sys_signal_posix=no)])
 if test $unet_cv_sys_signal_posix = yes; then
-  AC_DEFINE(POSIX_SIGNALS)
+  AC_DEFINE([POSIX_SIGNALS],,[Define if you have POSIX signals.])
 else
 AC_CACHE_CHECK([for bsd reliable signals], unet_cv_sys_signal_bsd,
 [AC_TRY_RUN([#include <signal.h>
@@ -121,9 +97,9 @@ int main(void)
   exit (0);
 }], unet_cv_sys_signal_bsd=yes, unet_cv_sys_signal_bsd=no)])
 if test $unet_cv_sys_signal_bsd = yes; then
-  AC_DEFINE(BSD_RELIABLE_SIGNALS)
+  AC_DEFINE([BSD_RELIABLE_SIGNALS],,[Define if you have (reliable) BSD signals.])
 else
-  AC_DEFINE(SYSV_UNRELIABLE_SIGNALS)
+  AC_DEFINE([SYSV_UNRELIABLE_SIGNALS],,[Define if you have (unreliable) SysV signals.])
 fi
 fi])
 
@@ -138,26 +114,37 @@ AC_CHECK_SIZEOF(short)
 AC_CHECK_SIZEOF(int)
 AC_CHECK_SIZEOF(long)
 AC_CHECK_SIZEOF(void *)
+AC_CHECK_SIZEOF(int64_t)
+AC_CHECK_SIZEOF(long long)
 if test "$ac_cv_sizeof_int" = 2 ; then
   AC_CHECK_TYPE(int16_t, int)
-  AC_CHECK_TYPE(u_int16_t, unsigned int)
+  AC_CHECK_TYPE(uint16_t, unsigned int)
 elif test "$ac_cv_sizeof_short" = 2 ; then
   AC_CHECK_TYPE(int16_t, short)
-  AC_CHECK_TYPE(u_int16_t, unsigned short)
+  AC_CHECK_TYPE(uint16_t, unsigned short)
 else
   AC_MSG_ERROR([Cannot find a type with size of 16 bits])
 fi
 if test "$ac_cv_sizeof_int" = 4 ; then
   AC_CHECK_TYPE(int32_t, int)
-  AC_CHECK_TYPE(u_int32_t, unsigned int)
+  AC_CHECK_TYPE(uint32_t, unsigned int)
 elif test "$ac_cv_sizeof_short" = 4 ; then
   AC_CHECK_TYPE(int32_t, short)
-  AC_CHECK_TYPE(u_int32_t, unsigned short)
+  AC_CHECK_TYPE(uint32_t, unsigned short)
 elif test "$ac_cv_sizeof_long" = 4 ; then
   AC_CHECK_TYPE(int32_t, long)
-  AC_CHECK_TYPE(u_int32_t, unsigned long)
+  AC_CHECK_TYPE(uint32_t, unsigned long)
 else
   AC_MSG_ERROR([Cannot find a type with size of 32 bits])
+fi
+if test "$ac_cv_sizeof_int64_t" = 8 ; then
+  AC_CHECK_TYPE(int64_t)
+  AC_CHECK_TYPE(uint64_t)
+elif test "$ac_cv_sizeof_long_long" = 8 ; then
+  AC_CHECK_TYPE(int64_t, long long)
+  AC_CHECK_TYPE(uint64_t, unsigned long long)
+else
+  AC_MSG_ERROR([Cannot find a type with size of 64 bits])
 fi])
 
 dnl Written by John Hawkinson <jhawk@mit.edu>. This code is in the Public

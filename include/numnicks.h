@@ -15,8 +15,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: numnicks.h,v 1.1.1.1 2004/02/28 11:11:06 bugs Exp $
+ */
+/** @file
+ * @brief Interface for numeric nickname functions.
+ * @version $Id: numnicks.h,v 1.1.1.1 2005/10/01 17:26:59 progs Exp $
  */
 #ifndef INCLUDED_numnicks_h
 #define INCLUDED_numnicks_h
@@ -35,23 +37,24 @@
 /*
  * used for buffer size calculations in channel.c
  */
+/** Maximum length of a full user numnick. */
 #define NUMNICKLEN 5            /* strlen("YYXXX") */
 
 /*
  * Macros
  */
 
-/*
+/** Provide format string arguments for a user's numnick.
  * Use this macro as follows: sprintf(buf, "%s%s ...", NumNick(cptr), ...);
  */
 #define NumNick(c) cli_yxx((cli_user(c))->server), cli_yxx(c)
 
-/*
+/** Provide format string arguments for a server's numnick.
  * Use this macro as follows: sprintf(buf, "%s ...", NumServ(cptr), ...);
  */
 #define NumServ(c) cli_yxx(c)
 
-/*
+/** Provide format string arguments for a server's capacity mask.
  * Use this macro as follows: sprintf(buf, "%s%s ...", NumServCap(cptr), ...);
  */
 #define NumServCap(c) cli_yxx(c), (cli_serv(c))->nn_capacity
@@ -81,6 +84,8 @@ extern struct Client* FindNServer(const char* numeric);
 
 extern unsigned int   base64toint(const char* str);
 extern const char*    inttobase64(char* buf, unsigned int v, unsigned int count);
+extern const char* iptobase64(char* buf, const struct irc_in_addr* addr, unsigned int count, int v6_ok);
+extern void base64toip(const char* s, struct irc_in_addr* addr);
 
 #endif /* INCLUDED_numnicks_h */
 

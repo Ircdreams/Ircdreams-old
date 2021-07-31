@@ -19,7 +19,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_account.c,v 1.22 2005/11/27 21:42:26 bugs Exp $
+ * $Id: m_account.c,v 1.3 2005/10/25 09:24:48 progs Exp $
  */
 
 /*
@@ -78,21 +78,21 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
-#include "channel.h"
 #include "ircd.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "msg.h"
 #include "numnicks.h"
+#include "s_debug.h"
 #include "s_user.h"
 #include "send.h"
-#include "ircd_features.h" 
-#include "querycmds.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
+#include <stdlib.h>
 #include <string.h>
 
 /*
@@ -110,7 +110,6 @@ int ms_account(struct Client* cptr, struct Client* sptr, int parc,
   if (parc < 2)
     return need_more_params(sptr, "ACCOUNT");
 
-
   if (!IsServer(sptr))
     return protocol_violation(cptr, "ACCOUNT from non-server %s",
 			      cli_name(sptr));
@@ -118,47 +117,44 @@ int ms_account(struct Client* cptr, struct Client* sptr, int parc,
   if (!(acptr = findNUser(parv[1])))
     return 0; /* Ignore ACCOUNT for a user that QUIT; probably crossed */
 
+  /*if (IsAccount(acptr))
+    return protocol_violation(cptr, "ACCOUNT for already registered user %s "
+			      "(%s -> %s)", cli_name(acptr),
+			      cli_user(acptr)->account, parv[2]);*/
+
+
   if (parc < 3)
-  { //delete account
+  { /* delete account */
 
     if (!IsAccount(acptr))
       return protocol_violation(cptr, "desACCOUNT pour un user non enregistré (%s)", cli_name(acptr));
 
     cli_user(acptr)->account[0] = '\0';
-        sendcmdto_serv_butone(sptr, CMD_ACCOUNT, cptr, "%C", acptr); /* on oublie pas de propager hin progs */
-    if(!HasHiddenHost(acptr) && !IsSetHost(acptr))
-    {
-      ClrFlag(acptr, FLAG_ACCOUNT);
-      --UserStats.authed;
-      return 0;
-    }
+    sendcmdto_serv_butone(sptr, CMD_ACCOUNT, cptr, "%C", acptr);
 
-    if(feature_int(FEAT_PROTECTHOST) !=0) protecthost(cli_user(acptr)->realhost, cli_user(acptr)->crypt);
-    else {
-	ircd_strncpy(cli_sockhost(acptr), cli_user(acptr)->realhost, HOSTLEN);
-	ircd_strncpy(cli_user(acptr)->host, cli_user(acptr)->realhost, HOSTLEN);
-	ircd_strncpy(cli_user(acptr)->crypt, cli_user(acptr)->realhost, HOSTLEN);
-	}
-    ClearSetHost(acptr);
-    ClearHiddenHost(acptr);
     ClrFlag(acptr, FLAG_ACCOUNT);
-    --UserStats.authed;
     return 0;
   }
 
-  /*if (IsAccount(acptr))
-    return protocol_violation(cptr, "ACCOUNT for already registered user %s "
-			      "(%s -> %s)", cli_name(acptr),
-			      cli_user(acptr)->account, parv[2]); */
-
   if (strlen(parv[2]) > ACCOUNTLEN)
-    return protocol_violation(cptr, "Received account (%s) longer than %d for %s; ignoring.", parv[2], ACCOUNTLEN, cli_name(acptr));
-  else
-    ircd_strncpy(cli_user(acptr)->account, parv[2], ACCOUNTLEN);
-    
+    return protocol_violation(cptr,
+                              "Received account (%s) longer than %d for %s; "
+                              "ignoring.",
+                              parv[2], ACCOUNTLEN, cli_name(acptr));
+
+  if (parc > 3) {
+    cli_user(acptr)->acc_create = atoi(parv[3]);
+    Debug((DEBUG_DEBUG, "Received timestamped account: account \"%s\", "
+           "timestamp %Tu", parv[2], cli_user(acptr)->acc_create));
+  }
+
+  ircd_strncpy(cli_user(acptr)->account, parv[2], ACCOUNTLEN);
   hide_hostmask(acptr, FLAG_ACCOUNT);
-  	
-  sendcmdto_serv_butone(sptr, CMD_ACCOUNT, cptr, "%C %s", acptr, cli_user(acptr)->account);
-  ++UserStats.authed;
+
+  sendcmdto_serv_butone(sptr, CMD_ACCOUNT, cptr,
+                        cli_user(acptr)->acc_create ? "%C %s %Tu" : "%C %s",
+                        acptr, cli_user(acptr)->account,
+                        cli_user(acptr)->acc_create);
+
   return 0;
 }

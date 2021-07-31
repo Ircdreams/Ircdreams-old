@@ -15,10 +15,12 @@
  *   You should have received a copy of the GNU General Public License
  *   along with this program; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- *  $Id: listener.c,v 1.6 2005/01/24 01:19:23 bugs Exp $
  */
-#include "../config.h"
+/** @file
+ * @brief Implementation for handling listening sockets.
+ * @version $Id: listener.c,v 1.1.1.1 2005/10/01 17:27:47 progs Exp $
+ */
+#include "config.h"
 
 #include "listener.h"
 #include "client.h"
@@ -26,10 +28,12 @@
 #include "ircd_alloc.h"
 #include "ircd_events.h"
 #include "ircd_features.h"
+#include "ircd_log.h"
 #include "ircd_osdep.h"
 #include "ircd_reply.h"
 #include "ircd_snprintf.h"
 #include "ircd_string.h"
+#include "match.h"
 #include "numeric.h"
 #include "s_bsd.h"
 #include "s_conf.h"
@@ -38,7 +42,7 @@
 #include "send.h"
 #include "sys.h"         /* MAXCLIENTS */
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -46,27 +50,29 @@
 #include <unistd.h>
 #include <netdb.h>
 #include <sys/socket.h>
-#include <arpa/inet.h>
 
-#ifndef INADDR_NONE
-#define INADDR_NONE ((unsigned int) 0xffffffff)
-#endif
-
+/** List of listening sockets. */
 struct Listener* ListenerPollList = 0;
 
 static void accept_connection(struct Event* ev);
 
-static struct Listener* make_listener(int port, struct in_addr addr)
+/** Allocate and initialize a new Listener structure for a particular
+ * socket address.
+ * @param[in] port Port number to listen on.
+ * @param[in] addr Local address to listen on.
+ * @return Newly allocated and initialized Listener.
+ */
+static struct Listener* make_listener(int port, const struct irc_in_addr *addr)
 {
-  struct Listener* listener = 
+  struct Listener* listener =
     (struct Listener*) MyMalloc(sizeof(struct Listener));
   assert(0 != listener);
 
   memset(listener, 0, sizeof(struct Listener));
 
   listener->fd          = -1;
-  listener->port        = port;
-  listener->addr.s_addr = addr.s_addr;
+  listener->addr.port   = port;
+  memcpy(&listener->addr.addr, addr, sizeof(listener->addr.addr));
 
 #ifdef NULL_POINTER_NOT_ZERO
   listener->next = NULL;
@@ -75,28 +81,33 @@ static struct Listener* make_listener(int port, struct in_addr addr)
   return listener;
 }
 
+/** Deallocate a Listener structure.
+ * @param[in] listener Listener to be freed.
+ */
 static void free_listener(struct Listener* listener)
 {
   assert(0 != listener);
   MyFree(listener);
 }
 
+/** Maximum length for a port number. */
 #define PORTNAMELEN 10  /* ":31337" */
 
-/*
- * get_listener_name - return displayable listener name and port
- * returns "host.foo.org:6667" for a given listener
+/** Return displayable listener name and port.
+ * @param[in] listener %Listener to format as a text string.
+ * @return Pointer to a static buffer that contains "server.name:6667".
  */
 const char* get_listener_name(const struct Listener* listener)
 {
   static char buf[HOSTLEN + PORTNAMELEN + 4];
   assert(0 != listener);
-  ircd_snprintf(0, buf, sizeof(buf), "%s:%u", cli_name(&me), listener->port);
+  ircd_snprintf(0, buf, sizeof(buf), "%s:%u", cli_name(&me), listener->addr.port);
   return buf;
 }
 
-/*
- * count_listener_memory - count memory and listeners
+/** Count allocated listeners and the memory they use.
+ * @param[out] count_out Receives number of allocated listeners.
+ * @param[out] size_out Receives bytes used by listeners.
  */
 void count_listener_memory(int* count_out, size_t* size_out)
 {
@@ -109,21 +120,19 @@ void count_listener_memory(int* count_out, size_t* size_out)
   *count_out = count;
   *size_out  = count * sizeof(struct Listener);
 }
-  
-/*
- * show_ports - send port listing to a client
- * inputs       - pointer to client to show ports to
- * output       - none
- * side effects - show ports
- * author       - Dianora
+
+/** Report listening ports to a client.
+ * @param[in] sptr Client requesting statistics.
+ * @param[in] sd Stats descriptor for request (ignored).
+ * @param[in] param Extra parameter from user (port number to search for).
  */
-void show_ports(struct Client* sptr, struct StatDesc* sd, int stat,
-		char* param)
+void show_ports(struct Client* sptr, const struct StatDesc* sd,
+                char* param)
 {
-  struct Listener* listener = 0;
-  char             flags[8];
+  struct Listener *listener = 0;
+  char flags[8];
   int show_hidden = IsOper(sptr);
-  int count = IsOper(sptr) || MyUser(sptr) ? 100 : 8;
+  int count = (IsOper(sptr) || MyUser(sptr)) ? 100 : 8;
   int port = 0;
 
   assert(0 != sptr);
@@ -132,13 +141,9 @@ void show_ports(struct Client* sptr, struct StatDesc* sd, int stat,
     port = atoi(param);
 
   for (listener = ListenerPollList; listener; listener = listener->next) {
-    if (port && port != listener->port)
+    if (port && port != listener->addr.port)
       continue;
-#ifdef USE_SSL
-    flags[0] = (listener->server) ? 'S' : ((listener->ssl) ? 'E' : 'C');
-#else
     flags[0] = (listener->server) ? 'S' : 'C';
-#endif /* USE_SSL */
     if (listener->hidden) {
       if (!show_hidden)
         continue;
@@ -148,7 +153,7 @@ void show_ports(struct Client* sptr, struct StatDesc* sd, int stat,
     else
       flags[1] = '\0';
 
-    send_reply(sptr, RPL_STATSPLINE, listener->port, listener->ref_count,
+    send_reply(sptr, RPL_STATSPLINE, listener->addr.port, listener->ref_count,
 	       flags, (listener->active) ? "active" : "disabled");
     if (--count == 0)
       break;
@@ -167,46 +172,24 @@ void show_ports(struct Client* sptr, struct StatDesc* sd, int stat,
 #ifdef SOMAXCONN
 #define HYBRID_SOMAXCONN SOMAXCONN
 #else
+/** Maximum length of socket connection backlog. */
 #define HYBRID_SOMAXCONN 64
 #endif
 
+/** Open listening socket for \a listener.
+ * @param[in,out] listener Listener to make a socket for.
+ * @return Non-zero on success, zero on failure.
+ */
 static int inetport(struct Listener* listener)
 {
-  struct sockaddr_in sin;
   int                fd;
 
   /*
    * At first, open a new socket
    */
-  if (-1 == (fd = socket(AF_INET, SOCK_STREAM, 0))) {
-    report_error(SOCKET_ERROR_MSG, get_listener_name(listener), errno);
+  fd = os_socket(&listener->addr, SOCK_STREAM, get_listener_name(listener));
+  if (fd < 0)
     return 0;
-  }
-  else if (fd > MAXCLIENTS - 1) {
-    report_error(CONNLIMIT_ERROR_MSG, get_listener_name(listener), 0);
-    close(fd);
-    return 0;
-  }
-
-  if (!os_set_reuseaddr(fd)) {
-    report_error(REUSEADDR_ERROR_MSG, get_listener_name(listener), errno);
-    close(fd);
-    return 0;
-  }
-  /*
-   * Bind a port to listen for new connections if port is non-null,
-   * else assume it is already open and try get something from it.
-   */
-  memset(&sin, 0, sizeof(sin));
-  sin.sin_family = AF_INET;
-  sin.sin_addr   = listener->addr;
-  sin.sin_port   = htons(listener->port);
-
-  if (bind(fd, (struct sockaddr*) &sin, sizeof(sin))) {
-    report_error(BIND_ERROR_MSG, get_listener_name(listener), errno);
-    close(fd);
-    return 0;
-  }
   /*
    * Set the buffer sizes for the listener. Accepted connections
    * inherit the accepting sockets settings for SO_RCVBUF S_SNDBUF
@@ -214,22 +197,15 @@ static int inetport(struct Listener* listener)
    * else has no effect whatsoever on the connection.
    * NOTE: this must be set before listen is called
    */
-  if (!os_set_sockbufs(fd, listener->server ? SERVER_TCP_WINDOW : CLIENT_TCP_WINDOW,
-		listener->server ? SERVER_TCP_WINDOW : CLIENT_TCP_WINDOW)) {
+  if (!os_set_sockbufs(fd,
+                       (listener->server) ? feature_int(FEAT_SOCKSENDBUF) : CLIENT_TCP_WINDOW,
+                       (listener->server) ? feature_int(FEAT_SOCKRECVBUF) : CLIENT_TCP_WINDOW)) {
     report_error(SETBUFS_ERROR_MSG, get_listener_name(listener), errno);
     close(fd);
     return 0;
   }
   if (!os_set_listen(fd, HYBRID_SOMAXCONN)) {
     report_error(LISTEN_ERROR_MSG, get_listener_name(listener), errno);
-    close(fd);
-    return 0;
-  }
-  /*
-   * XXX - this should always work, performance will suck if it doesn't
-   */
-  if (!os_set_nonblocking(fd)) {
-    report_error(NONB_ERROR_MSG, get_listener_name(listener), errno);
     close(fd);
     return 0;
   }
@@ -252,81 +228,36 @@ static int inetport(struct Listener* listener)
   return 1;
 }
 
-/*
- * find_listener - find a listener in the list
- *
- * XXX - this function does N comparisons so if the list is huge
- * we may want to do something else for this. (rehash and init use this)
+/** Find the listener (if any) for a particular port and address.
+ * @param[in] port Port number to search for.
+ * @param[in] addr Local address to search for.
+ * @return Listener that matches (or NULL if none match).
  */
-static struct Listener* find_listener(int port, struct in_addr addr)
+static struct Listener* find_listener(int port, const struct irc_in_addr *addr)
 {
   struct Listener* listener;
   for (listener = ListenerPollList; listener; listener = listener->next) {
-    if (port == listener->port && addr.s_addr == listener->addr.s_addr)
+    if (port == listener->addr.port && !memcmp(addr, &listener->addr.addr, sizeof(*addr)))
       return listener;
   }
   return 0;
 }
 
-/*
- * set_listener_mask - set the connection mask for this listener
+/** Make sure we have a listener for \a port on \a vhost_ip.
+ * If one does not exist, create it.  Then mark it as active and set
+ * the peer mask, server, and hidden flags according to the other
+ * arguments.
+ * @param[in] port Port number to listen on.
+ * @param[in] vhost_ip Local address to listen on.
+ * @param[in] mask Address mask to accept connections from.
+ * @param[in] is_server Non-zero if the port should only accept server connections.
+ * @param[in] is_hidden Non-zero if the port should be hidden from /STATS P output.
  */
-static void set_listener_mask(struct Listener* listener, const char* mask)
-{
-  int  ad[4];
-  char ipname[20];
-
-  assert(0 != listener);
-
-  if (EmptyString(mask) || 0 == strcmp(mask, "*")) {
-    listener->mask.s_addr = 0;
-    return;
-  }
-  ad[0] = ad[1] = ad[2] = ad[3] = 0;
-  /*
-   * do it this way because building ip# from separate values for each
-   * byte requires endian knowledge or some nasty messing. Also means
-   * easy conversion of "*" 0.0.0.0 or 134.* to 134.0.0.0 :-)
-   */
-  sscanf(mask, "%d.%d.%d.%d", &ad[0], &ad[1], &ad[2], &ad[3]);
-  ircd_snprintf(0, ipname, sizeof(ipname), "%d.%d.%d.%d", ad[0], ad[1], ad[2],
-		ad[3]);
-  listener->mask.s_addr = inet_addr(ipname);
-}
-
-/*
- * connection_allowed - spin through mask and addr passed to see if connect 
- * allowed on a listener, uses mask generated by set_listener_mask
- */
-static int connection_allowed(const char* addr, const char* mask)
-{
-  int i = 4;
-  for ( ; i > 0; --i) {
-    if (*mask && *addr != *mask)
-      break;
-    ++addr;
-    ++mask;
-  }
-  return (0 == i);
-}
-
-
-/*
- * add_listener- create a new listener 
- * port - the port number to listen on
- * vhost_ip - if non-null must contain a valid IP address string in
- * the format "255.255.255.255"
- */
-#ifdef USE_SSL
-void add_listener(int port, const char* vhost_ip, const char* mask,
-                  int is_server, int is_hidden, int is_ssl)
-#else
 void add_listener(int port, const char* vhost_ip, const char* mask,
                   int is_server, int is_hidden)
-#endif /* USE_SSL */
 {
   struct Listener* listener;
-  struct in_addr   vaddr;
+  struct irc_in_addr vaddr;
 
   /*
    * if no port in conf line, don't bother
@@ -334,49 +265,37 @@ void add_listener(int port, const char* vhost_ip, const char* mask,
   if (0 == port)
     return;
 
-  vaddr.s_addr = INADDR_ANY;
+  memset(&vaddr, 0, sizeof(vaddr));
 
-  if (!EmptyString(vhost_ip) && strcmp(vhost_ip,"*") != 0) {
-    vaddr.s_addr = inet_addr(vhost_ip);
-    if (INADDR_NONE == vaddr.s_addr)
+  if (!EmptyString(vhost_ip)
+      && strcmp(vhost_ip, "*")
+      && !ircd_aton(&vaddr, vhost_ip))
       return;
+
+  listener = find_listener(port, &vaddr);
+  if (!listener)
+    listener = make_listener(port, &vaddr);
+  listener->active = 1;
+  listener->hidden = is_hidden;
+  listener->server = is_server;
+  if (mask)
+    ipmask_parse(mask, &listener->mask, &listener->mask_bits);
+  else
+    listener->mask_bits = 0;
+
+  if (listener->fd >= 0) {
+    /* If the listener is already open, do not try to re-open. */
   }
-
-  if ((listener = find_listener(port, vaddr))) {
-    /*
-     * set active flag and change connect mask here, it's the only thing 
-     * that can change on a rehash
-     */
-    listener->active = 1;
-    set_listener_mask(listener, mask);
-    listener->hidden = is_hidden;
-    listener->server = is_server;
-#ifdef USE_SSL
-    listener->ssl = is_ssl;
-#endif /* USE_SSL */
-    return;
-  }
-
-  listener = make_listener(port, vaddr);
-
-  if (inetport(listener)) {
-    listener->active = 1;
-    set_listener_mask(listener, mask);
-    listener->hidden = is_hidden;
-    listener->server = is_server;
-#ifdef USE_SSL
-    listener->ssl = is_ssl;
-#endif /* USE_SSL */
+  else if (inetport(listener)) {
     listener->next   = ListenerPollList;
-    ListenerPollList = listener; 
+    ListenerPollList = listener;
   }
   else
     free_listener(listener);
 }
 
-/*
- * mark_listeners_closing - iterate through listeners and mark them as
- * inactive
+/** Mark all listeners as closing (inactive).
+ * This is done so unused listeners are closed after a rehash.
  */
 void mark_listeners_closing(void)
 {
@@ -385,8 +304,8 @@ void mark_listeners_closing(void)
     listener->active = 0;
 }
 
-/*
- * close_listener - close a single listener
+/** Close a single listener.
+ * @param[in] listener Listener to close.
  */
 void close_listener(struct Listener* listener)
 {
@@ -409,11 +328,9 @@ void close_listener(struct Listener* listener)
     close(listener->fd);
   socket_del(&listener->socket);
 }
- 
-/*
- * close_listeners - close and free all listeners that are not being used
- */
-void close_listeners()
+
+/** Close all inactive listeners. */
+void close_listeners(void)
 {
   struct Listener* listener;
   struct Listener* listener_next = 0;
@@ -427,6 +344,9 @@ void close_listeners()
   }
 }
 
+/** Dereference the listener previously associated with a client.
+ * @param[in] listener Listener to dereference.
+ */
 void release_listener(struct Listener* listener)
 {
   assert(0 != listener);
@@ -435,20 +355,19 @@ void release_listener(struct Listener* listener)
     close_listener(listener);
 }
 
-/*
- * accept_connection - accept a connection on a listener
+/** Accept a connection on a listener.
+ * @param[in] ev Socket callback structure.
  */
 static void accept_connection(struct Event* ev)
 {
-  struct Listener* listener;
-  struct sockaddr_in addr = { 0 };
-  unsigned int       addrlen = sizeof(struct sockaddr_in);
-  int                fd;
+  struct Listener*    listener;
+  struct irc_sockaddr addr;
+  int                 fd;
 
   assert(0 != ev_socket(ev));
   assert(0 != s_data(ev_socket(ev)));
 
-  listener = s_data(ev_socket(ev));
+  listener = (struct Listener*) s_data(ev_socket(ev));
 
   if (ev_type(ev) == ET_DESTROY) /* being destroyed */
     free_listener(listener);
@@ -466,33 +385,31 @@ static void accept_connection(struct Event* ev)
      * Thus no specific errors are tested at this
      * point, just assume that connections cannot
      * be accepted until some old is closed first.
+     *
+     * This piece of code implements multi-accept, based
+     * on the idea that poll/select can only be efficient,
+     * if we succeed in handling all available events,
+     * i.e. accept all pending connections.
+     *
+     * http://www.hpl.hp.com/techreports/2000/HPL-2000-174.html
      */
-
-     /*
-      * This piece of code implements multi-accept, based
-      * on the idea that poll/select can only be efficient,
-      * if we succeed in handling all available events,
-      * i.e. accept all pending connections.
-      *
-      * http://www.hpl.hp.com/techreports/2000/HPL-2000-174.html
-      */
-
-    while (1) {
-      if (-1 == (fd = accept(listener->fd, (struct sockaddr*) &addr,
-			     &addrlen))) {
-
-        /* There is no other connection pending */
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
+    while (1)
+    {
+      if ((fd = os_accept(listener->fd, &addr)) == -1)
+      {
+        if (errno == EAGAIN ||
+#ifdef EWOULDBLOCK
+            errno == EWOULDBLOCK)
+#endif
           return;
-
-        /* Lotsa admins seem to have problems with not giving enough file
-         * descriptors to their server so we'll add a generic warning mechanism
-         * here.  If it turns out too many messages are generated for
-         * meaningless reasons we can filter them back.
-         */
-        sendto_opmask_butone(0, SNO_TCPCOMMON,
-			     "Impossible d'accepter la connexion: %m");
-        return;
+      /* Lotsa admins seem to have problems with not giving enough file
+       * descriptors to their server so we'll add a generic warning mechanism
+       * here.  If it turns out too many messages are generated for
+       * meaningless reasons we can filter them back.
+       */
+      sendto_opmask_butone(0, SNO_TCPCOMMON,
+			   "Unable to accept connection: %m");
+      return;
       }
       /*
        * check for connection limit. If this fd exceeds the limit,
@@ -500,9 +417,10 @@ static void accept_connection(struct Event* ev)
        * Enable the server to clear out other connections before
        * continuing to accept() new connections.
        */
-      if (fd > MAXCLIENTS - 1) {
+      if (fd > MAXCLIENTS - 1)
+      {
         ++ServerStats->is_ref;
-        send(fd, "ERREUR :Toutes les connexions sont déjà utilisées\r\n", 32, 0);
+        send(fd, "ERROR :All connections in use\r\n", 32, 0);
         close(fd);
         return;
       }
@@ -511,32 +429,26 @@ static void accept_connection(struct Event* ev)
        * to accept(), because it makes sense to clear our the
        * socket's queue as fast as possible.
        */
-      if (!listener->active) {
+      if (!listener->active)
+      {
         ++ServerStats->is_ref;
-        send(fd, "ERREUR :Utilisez un autre port\r\n", 25, 0);
+        send(fd, "ERROR :Use another port\r\n", 25, 0);
         close(fd);
         continue;
       }
       /*
        * check to see if connection is allowed for this address mask
        */
-      if (!connection_allowed((const char*) &addr,
-			      (const char*) &listener->mask)) {
+      if (!ipmask_check(&addr.addr, &listener->mask, listener->mask_bits))
+      {
         ++ServerStats->is_ref;
-        send(fd, "ERREUR :Utilisez un autre port\r\n", 25, 0);
+        send(fd, "ERROR :Use another port\r\n", 25, 0);
         close(fd);
-	continue;
+        continue;
       }
       ++ServerStats->is_ac;
       /* nextping = CurrentTime; */
-#ifdef USE_SSL
-      if (listener->ssl)
-        ssl_add_connection(listener, fd);
-      else
-        add_connection(listener, fd, NULL);
-#else
       add_connection(listener, fd);
-#endif /* USE_SSL */
     }
   }
 }

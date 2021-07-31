@@ -16,8 +16,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: class.h,v 1.1.1.1 2004/02/28 11:10:32 bugs Exp $
+ */
+/** @file
+ * @brief Declarations and interfaces for handling connection classes.
+ * @version $Id: class.h,v 1.2 2005/10/15 09:58:46 progs Exp $
  */
 #ifndef INCLUDED_class_h
 #define INCLUDED_class_h
@@ -26,41 +28,66 @@
 #define INCLUDED_sys_types_h
 #endif
 
-struct Client;
-struct StatDesc;
+#include "client.h"
+
 struct ConfItem;
+struct StatDesc;
 
 /*
  * Structures
  */
+/** Represents a connection class. */
 struct ConnectionClass {
-  struct ConnectionClass* next;
-  int                     cc_class;
-  unsigned int            max_sendq;
-  short                   ping_freq;
-  short                   conn_freq;
-  short                   max_links;
-  unsigned char           valid;
-  int                     ref_count;
+  struct ConnectionClass* next;           /**< Link to next connection class. */
+  char                    *cc_name;       /**< Name of connection class. */
+  char                    *default_umode; /**< Default usermode for users
+                                             in this class. */
+  struct Privs            privs;          /**< Privilege bits that are set on
+                                             or off. */
+  struct Privs            privs_dirty;    /**< Indication of which bits in
+                                             ConnectionClass::privs are valid. */
+  unsigned int            max_sendq;      /**< Maximum client SendQ in bytes. */
+  unsigned int            max_links;      /**< Maximum connections allowed. */
+  unsigned int            ref_count;      /**< Number of references to class. */
+  unsigned short          ping_freq;      /**< Ping frequency for clients. */
+  unsigned short          conn_freq;      /**< Auto-connect frequency. */
+  unsigned char           valid;          /**< Valid flag (cleared after this
+                                             class is removed from the config).*/
 };
 
 /*
  * Macro's
  */
 
-#define ConClass(x)     ((x)->cc_class)
+/** Get class name for \a x. */
+#define ConClass(x)     ((x)->cc_name)
+/** Get ping frequency for \a x. */
 #define PingFreq(x)     ((x)->ping_freq)
+/** Get connection frequency for \a x. */
 #define ConFreq(x)      ((x)->conn_freq)
+/** Get maximum links allowed for \a x. */
 #define MaxLinks(x)     ((x)->max_links)
+/** Get maximum SendQ size for \a x. */
 #define MaxSendq(x)     ((x)->max_sendq)
+/** Get number of references to \a x. */
 #define Links(x)        ((x)->ref_count)
 
-#define ConfClass(x)    ((x)->conn_class->cc_class)
+/** Get class name for ConfItem \a x. */
+#define ConfClass(x)    ((x)->conn_class->cc_name)
+/** Get ping frequency for ConfItem \a x. */
 #define ConfPingFreq(x) ((x)->conn_class->ping_freq)
+/** Get connection frequency for ConfItem \a x. */
 #define ConfConFreq(x)  ((x)->conn_class->conn_freq)
+/** Get maximum links allowed for ConfItem \a x. */
 #define ConfMaxLinks(x) ((x)->conn_class->max_links)
+/** Get maximum SendQ size for ConfItem \a x. */
 #define ConfSendq(x)    ((x)->conn_class->max_sendq)
+/** Get number of references to class in ConfItem \a x. */
 #define ConfLinks(x)    ((x)->conn_class->ref_count)
+/** Get default usermode for ConfItem \a x. */
+#define ConfUmode(x)    ((x)->conn_class->default_umode)
+/** Find a valid configuration class by name. */
+#define find_class(name) do_find_class((name), 0)
 
 /*
  * Proto types
@@ -72,18 +99,17 @@ extern const struct ConnectionClass* get_class_list(void);
 extern void class_mark_delete(void);
 extern void class_delete_marked(void);
 
-extern struct ConnectionClass *find_class(unsigned int cclass);
+extern struct ConnectionClass *do_find_class(const char *name, int extras);
 extern struct ConnectionClass *make_class(void);
 extern void free_class(struct ConnectionClass * tmp);
-extern unsigned int get_con_freq(struct ConnectionClass * clptr);
-extern unsigned int get_conf_class(const struct ConfItem *aconf);
+extern char *get_conf_class(const struct ConfItem *aconf);
 extern int get_conf_ping(const struct ConfItem *aconf);
-extern unsigned int get_client_class(struct Client *acptr);
-extern void add_class(unsigned int conclass, unsigned int ping,
-                      unsigned int confreq, unsigned int maxli, unsigned int sendq);
-extern void check_class(void);
-extern void report_classes(struct Client *sptr, struct StatDesc *sd, int stat,
-			   char *param);
+extern char *get_client_class(struct Client *acptr);
+extern void add_class(char *name, unsigned int ping,
+                      unsigned int confreq, unsigned int maxli,
+                      unsigned int sendq);
+extern void report_classes(struct Client *sptr, const struct StatDesc *sd,
+                           char *param);
 extern unsigned int get_sendq(struct Client* cptr);
 
 extern void class_send_meminfo(struct Client* cptr);

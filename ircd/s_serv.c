@@ -19,10 +19,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: s_serv.c,v 1.10 2005/12/09 05:27:44 bugs Exp $
  */
-#include "../config.h"
+/** @file
+ * @brief Miscellaneous server support functions.
+ * @version $Id: s_serv.c,v 1.1.1.1 2005/10/01 17:28:35 progs Exp $
+ */
+#include "config.h"
 
 #include "s_serv.h"
 #include "IPcheck.h"
@@ -32,10 +34,11 @@
 #include "hash.h"
 #include "ircd.h"
 #include "ircd_alloc.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "ircd_snprintf.h"
-#include "ircd_xopen.h"
+#include "ircd_crypt.h"
 #include "jupe.h"
 #include "list.h"
 #include "match.h"
@@ -51,20 +54,27 @@
 #include "s_misc.h"
 #include "s_user.h"
 #include "send.h"
-#include "shun.h"
-#include "ircd_struct.h"
+#include "struct.h"
 #include "sys.h"
 #include "userload.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
-#include <unistd.h>
 
+/** Maximum connection count since last restart. */
 unsigned int max_connection_count = 0;
+/** Maximum (local) client count since last restart. */
 unsigned int max_client_count = 0;
 
+/** Squit a new (pre-burst) server.
+ * @param cptr Local client that tried to introduce the server.
+ * @param sptr Server to disconnect.
+ * @param host Name of server being disconnected.
+ * @param timestamp Link time of server being disconnected.
+ * @param pattern Format string for squit message.
+ * @return CPTR_KILLED if cptr == sptr, else 0.
+ */
 int exit_new_server(struct Client *cptr, struct Client *sptr, const char *host,
                     time_t timestamp, const char *pattern, ...)
 {
@@ -84,17 +94,22 @@ int exit_new_server(struct Client *cptr, struct Client *sptr, const char *host,
   return retval;
 }
 
+/** Indicate whether \a a is between \a b and #me (that is, \a b would
+ * be killed if \a a squits).
+ * @param a A server that may be between us and \a b.
+ * @param b A client that may be on the far side of \a a.
+ * @return Non-zero if \a a is between \a b and #me.
+ */
 int a_kills_b_too(struct Client *a, struct Client *b)
 {
   for (; b != a && b != &me; b = cli_serv(b)->up);
   return (a == b ? 1 : 0);
 }
 
-/*
- * server_estab
- *
- * May only be called after a SERVER was received from cptr,
- * and thus make_server was called, and serv->prot set. --Run
+/** Handle a connection that has sent a valid PASS and SERVER.
+ * @param cptr New peer server.
+ * @param aconf Connect block for \a cptr.
+ * @return Zero.
  */
 int server_estab(struct Client *cptr, struct ConfItem *aconf)
 {
@@ -113,29 +128,20 @@ int server_estab(struct Client *cptr, struct ConfItem *aconf)
     /*
      *  Pass my info to the new server
      */
-    sendrawto_one(cptr, MSG_SERVER " %s 1 %Tu %Tu J%s %s%s +%s :%s",
+    sendrawto_one(cptr, MSG_SERVER " %s 1 %Tu %Tu J%s %s%s +%s6 :%s",
 		  cli_name(&me), cli_serv(&me)->timestamp,
 		  cli_serv(cptr)->timestamp, MAJOR_PROTOCOL, NumServCap(&me),
 		  feature_bool(FEAT_HUB) ? "h" : "",
 		  *(cli_info(&me)) ? cli_info(&me) : "IRCers United");
-    /*
-     * Don't charge this IP# for connecting
-     * XXX - if this comes from a server port, it will not have been added
-     * to the IP check registry, see add_connection in s_bsd.c
-     */
-    IPcheck_connect_fail(cli_ip(cptr));
   }
 
-  det_confs_butmask(cptr, CONF_LEAF | CONF_HUB | CONF_SERVER | CONF_UWORLD);
+  det_confs_butmask(cptr, CONF_SERVER | CONF_UWORLD);
 
   if (!IsHandshake(cptr))
     hAddClient(cptr);
   SetServer(cptr);
   cli_handler(cptr) = SERVER_HANDLER;
   Count_unknownbecomesserver(UserStats);
-
-  release_dns_reply(cptr);
-
   SetBurst(cptr);
 
 /*    nextping = CurrentTime; */
@@ -147,7 +153,7 @@ int server_estab(struct Client *cptr, struct ConfItem *aconf)
   if (cli_serv(cptr)->user && *(cli_serv(cptr))->by &&
       (acptr = findNUser(cli_serv(cptr)->by))) {
     if (cli_user(acptr) == cli_serv(cptr)->user) {
-      sendcmdto_one(&me, CMD_NOTICE, acptr, "%C :Lien avec %s établi!",
+      sendcmdto_one(&me, CMD_NOTICE, acptr, "%C :Link with %s established.",
                     acptr, inpath);
     }
     else {
@@ -159,10 +165,10 @@ int server_estab(struct Client *cptr, struct ConfItem *aconf)
     }
   }
 
-  sendto_opmask_butone(acptr, SNO_OLDSNO, "Lien avec %s établi!", inpath);
+  sendto_opmask_butone(acptr, SNO_OLDSNO, "Link with %s established.", inpath);
   cli_serv(cptr)->up = &me;
   cli_serv(cptr)->updown = add_dlink(&(cli_serv(&me))->down, cptr);
-  sendto_opmask_butone(0, SNO_NETWORK, "Jonction des serveurs: %s %s", cli_name(&me),
+  sendto_opmask_butone(0, SNO_NETWORK, "Net junction: %s %s", cli_name(&me),
                        cli_name(cptr));
   SetJunction(cptr);
   /*
@@ -178,26 +184,25 @@ int server_estab(struct Client *cptr, struct ConfItem *aconf)
     if (!match(cli_name(&me), cli_name(cptr)))
       continue;
     sendcmdto_one(&me, CMD_SERVER, acptr,
-		  "%s 2 0 %Tu J%02u %s%s +%s%s :%s", cli_name(cptr),
+		  "%s 2 0 %Tu J%02u %s%s +%s%s%s :%s", cli_name(cptr),
 		  cli_serv(cptr)->timestamp, Protocol(cptr), NumServCap(cptr),
 		  IsHub(cptr) ? "h" : "", IsService(cptr) ? "s" : "",
-		  cli_info(cptr));
+		  IsIPv6(cptr) ? "6" : "", cli_info(cptr));
   }
 
-  /* Send these as early as possible so that glined users/juped servers can 
-   * be removed from the network while the remote server is still chewing 
-   * our burst. 
-   */ 
+  /* Send these as early as possible so that glined users/juped servers can
+   * be removed from the network while the remote server is still chewing
+   * our burst.
+   */
   gline_burst(cptr);
-  shun_burst(cptr);
-  jupe_burst(cptr); 
+  jupe_burst(cptr);
 
   /*
    * Pass on my client information to the new server
    *
    * First, pass only servers (idea is that if the link gets
-   * cancelled beacause the server was already there,
-   * there are no NICK's to be cancelled...). Of course,
+   * canceled because the server was already there,
+   * there are no NICK's to be canceled...). Of course,
    * if cancellation occurs, all this info is sent anyway,
    * and I guess the link dies when a read is attempted...? --msa
    *
@@ -222,11 +227,11 @@ int server_estab(struct Client *cptr, struct ConfItem *aconf)
       if (0 == match(cli_name(&me), cli_name(acptr)))
         continue;
       sendcmdto_one(cli_serv(acptr)->up, CMD_SERVER, cptr,
-		    "%s %d 0 %Tu %s%u %s%s +%s%s :%s", cli_name(acptr),
+		    "%s %d 0 %Tu %s%u %s%s +%s%s%s :%s", cli_name(acptr),
 		    cli_hopcount(acptr) + 1, cli_serv(acptr)->timestamp,
 		    protocol_str, Protocol(acptr), NumServCap(acptr),
 		    IsHub(acptr) ? "h" : "", IsService(acptr) ? "s" : "",
-		    cli_info(acptr));
+		    IsIPv6(acptr) ? "6" : "", cli_info(acptr));
     }
   }
 
@@ -237,20 +242,15 @@ int server_estab(struct Client *cptr, struct ConfItem *aconf)
       continue;
     if (IsUser(acptr))
     {
-      char xxx_buf[8];
+      char xxx_buf[25];
       char *s = umode_str(acptr);
       sendcmdto_one(cli_user(acptr)->server, CMD_NICK, cptr,
 		    "%s %d %Tu %s %s %s%s%s%s %s%s :%s",
 		    cli_name(acptr), cli_hopcount(acptr) + 1, cli_lastnick(acptr),
 		    cli_user(acptr)->username, cli_user(acptr)->realhost,
 		    *s ? "+" : "", s, *s ? " " : "",
-		    inttobase64(xxx_buf, ntohl(cli_ip(acptr).s_addr), 6),
+		    iptobase64(xxx_buf, &cli_ip(acptr), sizeof(xxx_buf), IsIPv6(cptr)),
 		    NumNick(acptr), cli_info(acptr));
-      if (cli_user(acptr)->away)
-        sendcmdto_one(acptr, CMD_AWAY, cptr, ":%s", cli_user(acptr)->away);
-      if (cli_user(acptr)->swhois)
-        sendcmdto_one(cli_user(acptr)->server, CMD_SWHOIS, cptr,
-                      "%C :%s", acptr, cli_user(acptr)->swhois);
     }
   }
   /*
@@ -265,3 +265,4 @@ int server_estab(struct Client *cptr, struct ConfItem *aconf)
   sendcmdto_one(&me, CMD_END_OF_BURST, cptr, "");
   return 0;
 }
+

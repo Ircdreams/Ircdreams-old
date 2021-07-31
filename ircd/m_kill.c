@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_kill.c,v 1.6 2005/02/05 05:42:43 bugs Exp $
+ * $Id: m_kill.c,v 1.2 2005/10/25 14:47:21 progs Exp $
  */
 
 /*
@@ -79,7 +79,7 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "hash.h"
@@ -96,7 +96,7 @@
 #include "send.h"
 #include "whowas.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <string.h>
 
 /*
@@ -119,7 +119,7 @@ static int do_kill(struct Client* cptr, struct Client* sptr,
    *       have changed the target because of the nickname change.
    */
   sendto_opmask_butone(0, IsServer(sptr) ? SNO_SERVKILL : SNO_OPERKILL,
-                       "Reçu un message KILL pour %s. depuis %s de: %s!%s %s",
+                       "Received KILL message for %s. From %s Path: %s!%s %s",
                        get_client_name(victim, SHOW_IP), cli_name(sptr),
                        inpath, path, msg);
   log_write_kill(victim, sptr, inpath, path, msg);
@@ -151,18 +151,18 @@ static int do_kill(struct Client* cptr, struct Client* sptr,
    * always sees the kill as coming from me.
    */
   if (MyConnect(victim))
-    sendcmdto_one(feature_bool(FEAT_HIS_KILLWHO) ? &me : sptr, CMD_KILL, 
+    sendcmdto_one(feature_bool(FEAT_HIS_KILLWHO) ? &his : sptr, CMD_KILL,
 		  victim, "%C :%s %s", victim, feature_bool(FEAT_HIS_KILLWHO)
 		  ? feature_str(FEAT_HIS_SERVERNAME) : cli_name(sptr), msg);
   return exit_client_msg(cptr, victim, feature_bool(FEAT_HIS_KILLWHO)
 			 ? &me : sptr, "Killed (%s %s)",
-			 feature_bool(FEAT_HIS_KILLWHO) ? 
+			 feature_bool(FEAT_HIS_KILLWHO) ?
 			 feature_str(FEAT_HIS_SERVERNAME) : cli_name(sptr),
 			 msg);
 }
 
 /*
- * ms_kill - server message handler template
+ * ms_kill - server message handler
  *
  * NOTE: IsServer(cptr) == true;
  *
@@ -198,8 +198,8 @@ int ms_kill(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 
   if (!(victim = findNUser(parv[1]))) {
     if (IsUser(sptr))
-      sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :KILL cible déconnecté "
-		    "avant que je le touche :(", sptr);
+      sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :KILL target disconnected "
+		    "before I got him :(", sptr);
     return 0;
   }
 
@@ -227,7 +227,7 @@ int ms_kill(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 }
 
 /*
- * mo_kill - oper message handler template
+ * mo_kill - oper message handler
  *
  * NOTE: IsPrivileged(sptr), IsAnOper(sptr) == true
  *       IsServer(cptr), IsServer(sptr) == false
@@ -258,7 +258,7 @@ int mo_kill(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 
   if (!(victim = FindClient(user))) {
     /*
-     * If the user has recently changed nick, we automaticly
+     * If the user has recently changed nick, we automatically
      * rewrite the KILL for this new nickname--this keeps
      * servers in synch when nick change and kill collide
      */
@@ -280,14 +280,12 @@ int mo_kill(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   if (IsChannelService(victim))
     return send_reply(sptr, ERR_ISCHANSERVICE, "KILL", cli_name(victim));
 
-  if (IsProtect(victim))
-     return send_reply(sptr, ERR_ISGODMODE, "KILL", cli_name(victim));
-  
+
   if (!MyConnect(victim) && !HasPriv(sptr, PRIV_KILL)) {
-    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Nick %s n'est pas sur votre serveur",
+    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Nick %s isn't on your server",
 		  sptr, cli_name(victim));
     return 0;
   }
-  return do_kill(cptr, sptr, victim, cli_user(sptr)->crypt, cli_name(sptr),
+  return do_kill(cptr, sptr, victim, cli_user(sptr)->realhost, cli_name(sptr),
 		 msg);
 }

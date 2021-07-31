@@ -1,19 +1,19 @@
-/*
- * ircd_osdep.h
- *
- * $Id: ircd_osdep.h,v 1.2 2005/01/03 03:53:13 bugs Exp $
+/** @file ircd_osdep.h
+ * @brief Public definitions and APIs for OS-dependent operations.
+ * @version $Id: ircd_osdep.h,v 1.1.1.1 2005/10/01 17:26:55 progs Exp $
  */
 #ifndef INCLUDED_ircd_osdep_h
 #define INCLUDED_ircd_osdep_h
 
 struct Client;
-struct sockaddr_in;
+struct irc_sockaddr;
 struct MsgQ;
 
+/** Result of an input/output operation. */
 typedef enum IOResult {
-  IO_FAILURE = -1,
-  IO_BLOCKED = 0,
-  IO_SUCCESS = 1
+  IO_FAILURE = -1, /**< Serious I/O error (not due to blocking). */
+  IO_BLOCKED = 0,  /**< I/O could not start because it would block. */
+  IO_SUCCESS = 1   /**< I/O succeeded. */
 } IOResult;
 
 /*
@@ -21,25 +21,38 @@ typedef enum IOResult {
  * Client struct. When passed as a parameter, the pointer just needs
  * to be forwarded to the enumeration function.
  */
-typedef void (*EnumFn)(struct Client*, const char* msg);
+/** Callback function to show rusage information.
+ * @param cptr Client to receive the message.
+ * @param msg Text message to send to user.
+ */
+typedef void (*EnumFn)(struct Client* cptr, const char* msg);
 
-extern int os_disable_options(int);
-extern int os_get_rusage(struct Client*, int, EnumFn);
-extern int os_get_sockerr(int);
-extern int os_get_sockname(int, struct sockaddr_in *);
-extern int os_get_peername(int, struct sockaddr_in *);
-extern IOResult os_recv_nonb(int, char *, unsigned int, unsigned int *);
-extern IOResult os_send_nonb(int, const char *, unsigned int, unsigned int *);
-extern IOResult os_sendv_nonb(int, struct MsgQ *, unsigned int *, unsigned int *);
-extern IOResult os_recvfrom_nonb(int, char *, unsigned int,
-					unsigned int *, struct sockaddr_in *);
-extern IOResult os_connect_nonb(int, const struct sockaddr_in *);
-extern int os_set_fdlimit(unsigned int);
-extern int os_set_listen(int, int);
-extern int os_set_nonblocking(int);
-extern int os_set_reuseaddr(int);
-extern int os_set_sockbufs(int, unsigned int, unsigned int);
-extern int os_set_tos(int, int);
+extern int os_disable_options(int fd);
+extern int os_get_rusage(struct Client* cptr, int uptime, EnumFn enumerator);
+extern int os_get_sockerr(int fd);
+extern int os_get_sockname(int fd, struct irc_sockaddr* sin_out);
+extern int os_get_peername(int fd, struct irc_sockaddr* sin_out);
+extern int os_socket(const struct irc_sockaddr* local, int type, const char* port_name);
+extern int os_accept(int fd, struct irc_sockaddr* peer);
+extern IOResult os_sendto_nonb(int fd, const char* buf, unsigned int length,
+                               unsigned int* length_out, unsigned int flags,
+                               const struct irc_sockaddr* peer);
+extern IOResult os_recv_nonb(int fd, char* buf, unsigned int length,
+                        unsigned int* length_out);
+extern IOResult os_send_nonb(int fd, const char* buf, unsigned int length,
+                        unsigned int* length_out);
+extern IOResult os_sendv_nonb(int fd, struct MsgQ* buf,
+			      unsigned int* len_in, unsigned int* len_out);
+extern IOResult os_recvfrom_nonb(int fd, char* buf, unsigned int len,
+                                 unsigned int* length_out,
+                                 struct irc_sockaddr* from_out);
+extern IOResult os_connect_nonb(int fd, const struct irc_sockaddr* sin);
+extern int os_set_fdlimit(unsigned int max_descriptors);
+extern int os_set_listen(int fd, int backlog);
+extern int os_set_nonblocking(int fd);
+extern int os_set_reuseaddr(int fd);
+extern int os_set_sockbufs(int fd, unsigned int ssize, unsigned int rsize);
+extern int os_set_tos(int fd,int tos);
 
 #endif /* INCLUDED_ircd_osdep_h */
 

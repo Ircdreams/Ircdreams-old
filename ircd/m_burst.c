@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_burst.c,v 1.27 2005/12/07 05:58:46 bugs Exp $
+ * $Id: m_burst.c,v 1.4 2005/11/01 09:53:18 progs Exp $
  */
 
 /*
@@ -79,7 +79,7 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "channel.h"
 #include "client.h"
@@ -87,6 +87,7 @@
 #include "ircd.h"
 #include "ircd_alloc.h"
 #include "ircd_features.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "list.h"
@@ -97,38 +98,40 @@
 #include "s_conf.h"
 #include "s_misc.h"
 #include "send.h"
-#include "ircd_struct.h"
-#include "support.h"
+#include "struct.h"
+#include "ircd_snprintf.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
-static int 
-netride_modes(int parc, char **parv, const char *curr_key) 
-{ 
-  char *modes = parv[0]; 
-  int result = 0; 
-    
-  assert(modes && modes[0] == '+'); 
-  while (*modes) { 
-    switch (*modes++) { 
-    case 'i': 
-      result |= MODE_INVITEONLY; 
-      break; 
-    case 'k': 
-      if (strcmp(curr_key, *++parv)) result |= MODE_KEY; 
-      break; 
-    case 'l': 
-      ++parv; 
-      break; 
-    case 'r': 
-      result |= MODE_REGONLY; 
-      break; 
-    } 
-  } 
-  return result; 
-} 
+static int
+netride_modes(int parc, char **parv, const char *curr_key)
+{
+  char *modes = parv[0];
+  int result = 0;
+
+  assert(modes && modes[0] == '+');
+  while (*modes) {
+    switch (*modes++) {
+    case 'i':
+      result |= MODE_INVITEONLY;
+      break;
+    case 'k':
+      if (strcmp(curr_key, *++parv))
+        result |= MODE_KEY;
+      break;
+    case 'l':
+      ++parv;
+      break;
+    case 'r':
+      result |= MODE_REGONLY;
+      break;
+    }
+  }
+  return result;
+}
 
 /*
  * ms_burst - server message handler
@@ -148,17 +151,54 @@ netride_modes(int parc, char **parv, const char *curr_key)
  *   parv[n] = %<ban> <ban> <ban> ...
  * If parv[n] starts with another character:
  *   parv[n] = <nick>[:<mode>],<nick>[:<mode>],...
- *   where <mode> is the channel mode (ov) of nick and all following nicks.
+ *   where <mode> defines the mode and op-level
+ *   for nick and all following nicks until the
+ *   next <mode> field.
+ *   Digits in the <mode> field have of two meanings:
+ *   1) if it is the first field in this BURST message
+ *      that contains digits, and/or when a 'v' is
+ *      present in the <mode>:
+ *      The absolute value of the op-level.
+ *   2) if there are only digits in this field and
+ *      it is not the first field with digits:
+ *      An op-level increment relative to the previous
+ *      op-level.
+ *   First all modeless nicks must be emmitted,
+ *   then all combinations of modes without ops
+ *   (currently that is only 'v') followed by the same
+ *   series but then with ops (currently 'o','ov').
  *
  * Example:
- * "S BURST #channel 87654321 +ntkl key 123 AAA,AAB:o,BAA,BAB:ov :%ban1 ban2"
+ * "A8 B #test 87654321 +ntkAl key secret 123 A8AAG,A8AAC:v,A8AAA:0,A8AAF:2,A8AAD,A8AAB:v1,A8AAE:1 :%ban1 ban2"
+ *
+ * <mode> list example:
+ *
+ * "xxx,sss:v,ttt,aaa:123,bbb,ccc:2,ddd,kkk:v2,lll:2,mmm"
+ *
+ * means
+ *
+ *  xxx		// first modeless nicks
+ *  sss +v	// then opless nicks
+ *  ttt +v	// no ":<mode>": everything stays the same
+ *  aaa -123	// first field with digit: absolute value
+ *  bbb -123
+ *  ccc -125	// only digits, not first field: increment
+ *  ddd -125
+ *  kkk -2 +v	// field with a 'v': absolute value
+ *  lll -4 +v	// only digits: increment
+ *  mmm -4 +v
  *
  * Anti net.ride code.
  *
- * When the channel already exist, and its TS is larger then
+ * When the channel already exist, and its TS is larger than
  * the TS in the BURST message, then we cancel all existing modes.
  * If its is smaller then the received BURST message is ignored.
  * If it's equal, then the received modes are just added.
+ *
+ * BURST is also accepted outside a netburst now because it
+ * is sent upstream as reaction to a DESTRUCT message.  For
+ * these BURST messages it is possible that the listed channel
+ * members are already joined.
  */
 int ms_burst(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
 {
@@ -166,7 +206,7 @@ int ms_burst(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
   struct Channel *chptr;
   time_t timestamp;
   struct Membership *member, *nmember;
-  struct SLink *lp, **lp_p;
+  struct Ban *lp, **lp_p;
   unsigned int parse_flags = (MODE_PARSE_FORCE | MODE_PARSE_BURST);
   int param, nickpos = 0, banpos = 0;
   char modestr[BUFSIZE], nickstr[BUFSIZE], banstr[BUFSIZE];
@@ -174,14 +214,61 @@ int ms_burst(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
   if (parc < 3)
     return protocol_violation(sptr,"Too few parameters for BURST");
 
-  if (!IsBurst(sptr)) /* don't allow BURST outside of burst */
-    return exit_client_msg(cptr, cptr, &me, "HACK: BURST message outside "
-			   "net.burst from %s", cli_name(sptr));
-
   if (!(chptr = get_channel(sptr, parv[1], CGT_CREATE)))
     return 0; /* can't create the channel? */
 
   timestamp = atoi(parv[2]);
+
+  if (chptr->creationtime)      /* 0 for new (empty) channels,
+                                   i.e. when this server just restarted. */
+  {
+    if (parc == 3)              /* Zannel BURST? */
+    {
+      /* An empty channel without +A set, will cause a BURST message
+         with exactly 3 parameters (because all modes have been reset).
+         If the timestamp on such channels is only a few seconds older
+         from our own, then we ignore this burst: we do not deop our
+         own side.
+         Likewise, we expect the other (empty) side to copy our timestamp
+         from our own BURST message, even though it is slightly larger.
+
+         The reason for this is to allow people to join an empty
+         non-A channel (a zannel) during a net.split, and not be
+         deopped when the net reconnects (with another zannel). When
+         someone joins a split zannel, their side increments the TS by one.
+         If they cycle a few times then we still don't have a reason to
+         deop them. Theoretically I see no reason not to accept ANY timestamp,
+         but to be sure, we only accept timestamps that are just a few
+         seconds off (one second for each time they cycled the channel). */
+
+      /* Don't even deop users who cycled four times during the net.break. */
+      if (timestamp < chptr->creationtime &&
+          chptr->creationtime <= timestamp + 4 &&
+          chptr->users != 0)    /* Only do this when WE have users, so that
+                                   if we do this the BURST that we sent has
+                                   parc > 3 and the other side will use the
+                                   test below: */
+        timestamp = chptr->creationtime; /* Do not deop our side. */
+    }
+    else if (chptr->creationtime < timestamp &&
+             timestamp <= chptr->creationtime + 4 &&
+             chptr->users == 0)
+    {
+      /* If one side of the net.junction does the above
+         timestamp = chptr->creationtime, then the other
+         side must do this: */
+      chptr->creationtime = timestamp;  /* Use the same TS on both sides. */
+    }
+    /* In more complex cases, we might still end up with a
+       creationtime desync of a few seconds, but that should
+       be synced automatically rather quickly (every JOIN
+       caries a timestamp and will sync it; modes by users do
+       not carry timestamps and are accepted regardless).
+       Only when nobody joins the channel on the side with
+       the oldest timestamp before a new net.break occurs
+       precisely inbetween the desync, an unexpected bounce
+       might happen on reconnect. */
+  }
 
   if (!chptr->creationtime || chptr->creationtime > timestamp) {
     /*
@@ -195,24 +282,25 @@ int ms_burst(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
       if (parv[param][0] != '+')
         continue;
       check_modes = netride_modes(parc - param, parv + param, chptr->mode.key);
-      if (check_modes) {
+      if (check_modes)
+      {
         /* Clear any outstanding rogue invites */
         mode_invite_clear(chptr);
-        for (member = chptr->members; member; member = nmember) {
-          nmember=member->next_member;
-	 if (!MyUser(member->user) || IsZombie(member))
-
-		continue;
-	  /* Kick as netrider if key mismatch *or* remote channel is 
-           * +i (unless user is an oper) *or* remote channel is +r 
-           * (unless user has an account). 
-           */ 
-          if (!(check_modes & MODE_KEY) 
-              && (!(check_modes & MODE_INVITEONLY) || IsAnOper(member->user)) 
-              && (!(check_modes & MODE_REGONLY) || IsAccount(member->user))) 
-	   continue;
+        for (member = chptr->members; member; member = nmember)
+        {
+          nmember = member->next_member;
+          if (!MyUser(member->user) || IsZombie(member) || IsAnOper(member->user))
+            continue;
+          /* Kick as netrider if key mismatch *or* remote channel is
+           * +i *or* remote channel is +r (unless user has an account).
+           */
+          if (!(check_modes & MODE_KEY)
+              && !(check_modes & MODE_INVITEONLY)
+              && (!(check_modes & MODE_REGONLY) || IsAccount(member->user)))
+            continue;
           sendcmdto_serv_butone(&me, CMD_KICK, NULL, "%H %C :Net Rider", chptr, member->user);
-          sendcmdto_channel_butserv_butone(&me, CMD_KICK, chptr, NULL, 0, "%H %C :Net Rider", chptr, member->user);
+          sendcmdto_channel_butserv_butone(feature_bool(FEAT_HIS_REWRITE) ? &his : &me,
+		CMD_KICK, chptr, NULL, 0, "%H %C :Net Rider", chptr, member->user);
           make_zombie(member, member->user, &me, &me, chptr);
         }
       }
@@ -226,7 +314,7 @@ int ms_burst(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
 
   /* turn off burst joined flag */
   for (member = chptr->members; member; member = member->next_member)
-    member->status &= ~CHFL_BURST_JOINED;
+    member->status &= ~(CHFL_BURST_JOINED|CHFL_BURST_ALREADY_OPPED|CHFL_BURST_ALREADY_VOICED);
 
   if (!chptr->creationtime) /* mark channel as created during BURST */
     chptr->mode.mode |= MODE_BURSTADDED;
@@ -235,33 +323,45 @@ int ms_burst(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
   if (!chptr->creationtime || chptr->creationtime > timestamp) {
     chptr->creationtime = timestamp;
 
-    modebuf_init(mbuf = &modebuf, feature_bool(FEAT_HIS_SERVERMODE) ? &me : sptr, cptr, chptr,
+    modebuf_init(mbuf = &modebuf, &me, cptr, chptr,
 		 MODEBUF_DEST_CHANNEL | MODEBUF_DEST_NOKEY);
     modebuf_mode(mbuf, MODE_DEL | chptr->mode.mode); /* wipeout modes */
-    chptr->mode.mode &= ~(MODE_ADD | MODE_DEL | MODE_PRIVATE | MODE_SECRET |
-			  MODE_MODERATED | MODE_TOPICLIMIT | MODE_INVITEONLY |
-			  MODE_NOPRIVMSGS | MODE_NOCTCP | MODE_NOCOLOUR |
-			  MODE_NOQUITPARTS | MODE_ACCONLY | 
-			  MODE_NONOTICE | MODE_OPERONLY |
-			  MODE_REGONLY | MODE_DELJOINS | MODE_NOAMSG |
-			  MODE_NOCAPS | MODE_NOCHANPUB | MODE_NOWEBPUB );
+    chptr->mode.mode &= MODE_BURSTADDED | MODE_WASDELJOINS;
+
+    /* wipe out modes not represented in chptr->mode.mode */
+    if (chptr->mode.limit) {
+      modebuf_mode_uint(mbuf, MODE_DEL | MODE_LIMIT, chptr->mode.limit);
+      chptr->mode.limit = 0;
+    }
+    if (chptr->mode.key[0]) {
+      modebuf_mode_string(mbuf, MODE_DEL | MODE_KEY, chptr->mode.key, 0);
+      chptr->mode.key[0] = '\0';
+    }
+    if (chptr->mode.upass[0]) {
+      modebuf_mode_string(mbuf, MODE_DEL | MODE_UPASS, chptr->mode.upass, 0);
+      chptr->mode.upass[0] = '\0';
+    }
+    if (chptr->mode.apass[0]) {
+      modebuf_mode_string(mbuf, MODE_DEL | MODE_APASS, chptr->mode.apass, 0);
+      chptr->mode.apass[0] = '\0';
+    }
 
     parse_flags |= (MODE_PARSE_SET | MODE_PARSE_WIPEOUT); /* wipeout keys */
 
     /* mark bans for wipeout */
     for (lp = chptr->banlist; lp; lp = lp->next)
-      lp->flags |= CHFL_BURST_BAN_WIPEOUT;
+      lp->flags |= BAN_BURST_WIPEOUT;
 
-    /*  clear topic set by netrider (if set) */ 
-    if (*chptr->topic) { 
-      *chptr->topic = '\0'; 
-      *chptr->topic_nick = '\0'; 
-      chptr->topic_time = 0; 
-      sendcmdto_channel_butserv_butone(&me, CMD_TOPIC, chptr, NULL, 0,
-        "%H :%s", chptr, chptr->topic); 
-    } 
+    /* clear topic set by netrider (if set) */
+    if (*chptr->topic) {
+      *chptr->topic = '\0';
+      *chptr->topic_nick = '\0';
+      chptr->topic_time = 0;
+      sendcmdto_channel_butserv_butone(feature_bool(FEAT_HIS_REWRITE) ? &his : &me,
+	 CMD_TOPIC, chptr, NULL, 0, "%H :%s", chptr, chptr->topic);
+    }
   } else if (chptr->creationtime == timestamp) {
-    modebuf_init(mbuf = &modebuf, feature_bool(FEAT_HIS_SERVERMODE) ? &me : sptr, cptr, chptr,
+    modebuf_init(mbuf = &modebuf, &me, cptr, chptr,
 		 MODEBUF_DEST_CHANNEL | MODEBUF_DEST_NOKEY);
 
     parse_flags |= MODE_PARSE_SET; /* set new modes */
@@ -278,7 +378,7 @@ int ms_burst(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
     case '%': /* parameter contains bans */
       if (parse_flags & MODE_PARSE_SET) {
 	char *banlist = parv[param] + 1, *p = 0, *ban, *ptr;
-	struct SLink *newban;
+	struct Ban *newban;
 
 	for (ban = ircd_strtok(&p, banlist, " "); ban;
 	     ban = ircd_strtok(&p, 0, " ")) {
@@ -293,16 +393,16 @@ int ms_burst(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
 	     * shown below *sigh*
 	     */
 	  for (lp = chptr->banlist; lp; lp = lp->next) {
-	    if (!ircd_strcmp(lp->value.ban.banstr, ban)) {
+	    if (!ircd_strcmp(lp->banstr, ban)) {
 	      ban = 0; /* don't add ban */
-	      lp->flags &= ~CHFL_BURST_BAN_WIPEOUT; /* not wiping out */
+	      lp->flags &= ~BAN_BURST_WIPEOUT; /* not wiping out */
 	      break; /* new ban already existed; don't even repropagate */
-	    } else if (!(lp->flags & CHFL_BURST_BAN_WIPEOUT) &&
-		       !mmatch(lp->value.ban.banstr, ban)) {
+	    } else if (!(lp->flags & BAN_BURST_WIPEOUT) &&
+		       !mmatch(lp->banstr, ban)) {
 	      ban = 0; /* don't add ban unless wiping out bans */
 	      break; /* new ban is encompassed by an existing one; drop */
-	    } else if (!mmatch(ban, lp->value.ban.banstr))
-	      lp->flags |= CHFL_BAN_OVERLAPPED; /* remove overlapping ban */
+	    } else if (!mmatch(ban, lp->banstr))
+	      lp->flags |= BAN_OVERLAPPED; /* remove overlapping ban */
 
 	    if (!lp->next)
 	      break;
@@ -319,19 +419,10 @@ int ms_burst(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
 	    for (ptr = ban; *ptr; ptr++) /* add ban to buffer */
 	      banstr[banpos++] = *ptr;
 
-	    newban = make_link(); /* create new ban */
-
-	    DupString(newban->value.ban.banstr, ban);
-
-	    DupString(newban->value.ban.who, 
-		      cli_name(feature_bool(FEAT_HIS_BANWHO) ? &me : sptr));
-
-	    newban->value.ban.when = TStime();
-
-	    newban->flags = CHFL_BAN | CHFL_BURST_BAN; /* set flags */
-	    if ((ptr = strrchr(ban, '@')) && check_if_ipmask(ptr + 1))
-	      newban->flags |= CHFL_BAN_IPMASK;
-
+	    newban = make_ban(ban); /* create new ban */
+            strcpy(newban->who, "*");
+	    newban->when = TStime();
+	    newban->flags |= BAN_BURSTED;
 	    newban->next = 0;
 	    if (lp)
 	      lp->next = newban; /* link it in */
@@ -339,7 +430,7 @@ int ms_burst(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
 	      chptr->banlist = newban;
 	  }
 	}
-      } 
+      }
       param++; /* look at next param */
       break;
 
@@ -347,13 +438,15 @@ int ms_burst(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
       {
 	struct Client *acptr;
 	char *nicklist = parv[param], *p = 0, *nick, *ptr;
-	int default_mode, last_mode;
-	int base_mode = CHFL_DEOPPED | CHFL_BURST_JOINED;
+	int current_mode, last_mode, base_mode;
+	int oplevel = -1;	/* Mark first field with digits: means the same as 'o' (but with level). */
+	int last_oplevel = 0;
+	struct Membership* member;
 
+        base_mode = CHFL_DEOPPED | CHFL_BURST_JOINED;
         if (chptr->mode.mode & MODE_DELJOINS)
-          base_mode |= CHFL_DELAYED;
-
-	default_mode=last_mode=base_mode;
+            base_mode |= CHFL_DELAYED;
+        current_mode = last_mode = base_mode;
 
 	for (nick = ircd_strtok(&p, nicklist, ","); nick;
 	     nick = ircd_strtok(&p, 0, ",")) {
@@ -362,14 +455,44 @@ int ms_burst(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
 	    *ptr++ = '\0';
 
 	    if (parse_flags & MODE_PARSE_SET) {
-		for (default_mode = base_mode ; *ptr;
-		   ptr++) {
-		if (*ptr == 'o') /* has oper status */
-		  default_mode = (default_mode & ~(CHFL_DEOPPED|CHFL_DELAYED)) | CHFL_CHANOP;
-                else if (*ptr == 'h') /* has % status */
-		  default_mode = (default_mode & ~CHFL_DELAYED) | CHFL_HALFOP;
-		else if (*ptr == 'v') /* has voice status */
-		  default_mode = (default_mode & ~CHFL_DELAYED) | CHFL_VOICE;
+	      int current_mode_needs_reset;
+	      for (current_mode_needs_reset = 1; *ptr; ptr++) {
+		if (*ptr == 'o') { /* has oper status */
+		  /*
+		   * An 'o' is pre-oplevel protocol, so this is only for
+		   * backwards compatibility.  Give them an op-level of
+		   * MAXOPLEVEL so everyone can deop them.
+		   */
+		  oplevel = MAXOPLEVEL;
+		  if (current_mode_needs_reset) {
+		    current_mode = base_mode;
+		    current_mode_needs_reset = 0;
+		  }
+		  current_mode = (current_mode & ~(CHFL_DEOPPED | CHFL_DELAYED)) | CHFL_CHANOP;
+		}
+		else if (*ptr == 'v') { /* has voice status */
+		  if (current_mode_needs_reset) {
+                    current_mode = base_mode;
+		    current_mode_needs_reset = 0;
+		  }
+		  current_mode = (current_mode & ~CHFL_DELAYED) | CHFL_VOICE;
+		  oplevel = -1;	/* subsequent digits are an absolute op-level value. */
+                }
+		else if (isdigit(*ptr)) {
+		  int level_increment = 0;
+		  if (oplevel == -1) { /* op-level is absolute value? */
+		    if (current_mode_needs_reset) {
+		      current_mode = base_mode;
+		      current_mode_needs_reset = 0;
+		    }
+		    oplevel = 0;
+		  }
+		  current_mode = (current_mode & ~(CHFL_DEOPPED | CHFL_DELAYED)) | CHFL_CHANOP;
+		  do {
+		    level_increment = 10 * level_increment + *ptr++ - '0';
+		  } while(isdigit(*ptr));
+		  oplevel += level_increment;
+		}
 		else /* I don't recognize that flag */
 		  break; /* so stop processing */
 	      }
@@ -386,31 +509,50 @@ int ms_burst(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
 	  for (ptr = nick; *ptr; ptr++) /* store nick */
 	    nickstr[nickpos++] = *ptr;
 
-	  if (default_mode != last_mode) { /* if mode changed... */
-	    last_mode = default_mode;
+	  if (current_mode != last_mode) { /* if mode changed... */
+	    last_mode = current_mode;
+	    last_oplevel = oplevel;
 
 	    nickstr[nickpos++] = ':'; /* add a specifier */
-	    if (default_mode & CHFL_CHANOP)
-	      nickstr[nickpos++] = 'o';
-	    if (default_mode & CHFL_HALFOP)
-              nickstr[nickpos++] = 'h';
-	    if (default_mode & CHFL_VOICE)
+	    if (current_mode & CHFL_VOICE)
 	      nickstr[nickpos++] = 'v';
+	    if (current_mode & CHFL_CHANOP)
+            {
+              if (chptr->mode.apass[0])
+	        nickpos += ircd_snprintf(0, nickstr + nickpos, sizeof(nickstr) - nickpos, "%u", oplevel);
+              else
+                nickstr[nickpos++] = 'o';
+            }
+	  } else if (current_mode & CHFL_CHANOP && oplevel != last_oplevel) { /* if just op level changed... */
+	    nickstr[nickpos++] = ':'; /* add a specifier */
+	    nickpos += ircd_snprintf(0, nickstr + nickpos, sizeof(nickstr) - nickpos, "%u", oplevel - last_oplevel);
+            last_oplevel = oplevel;
 	  }
 
-	  add_user_to_channel(chptr, acptr, default_mode);
-	  if (!(default_mode & CHFL_DELAYED) && !IsHiding(acptr))
-       		sendcmdto_channel_butserv_butone(acptr, CMD_JOIN, chptr, NULL, 0, "%H", chptr);
-	  if (IsHiding(acptr)) {
-     	  	sendto_opmask_butone(0, SNO_OLDSNO, "[+X] %s Join %H", cli_name(acptr), chptr);
-        	sendcmdto_one(acptr, CMD_JOIN, acptr, ":%H", chptr);
-     	  }
+	  if (IsBurst(sptr) || !(member = find_member_link(chptr, acptr)))
+	  {
+	    add_user_to_channel(chptr, acptr, current_mode, oplevel);
+            if (!(current_mode & CHFL_DELAYED))
+              sendcmdto_channel_butserv_butone(acptr, CMD_JOIN, chptr, NULL, 0, "%H", chptr);
+	  }
+	  else
+	  {
+	    /* The member was already joined (either by CREATE or JOIN).
+	       Remember the current mode. */
+	    if (member->status & CHFL_CHANOP)
+	      member->status |= CHFL_BURST_ALREADY_OPPED;
+	    if (member->status & CHFL_VOICE)
+	      member->status |= CHFL_BURST_ALREADY_VOICED;
+	    /* Synchronize with the burst. */
+	    member->status |= CHFL_BURST_JOINED | (current_mode & (CHFL_CHANOP|CHFL_VOICE));
+	    SetOpLevel(member, oplevel);
+	  }
 	}
       }
       param++;
       break;
-    } /* switch (*parv[param]) { */
-  } /* while (param < parc) { */
+    } /* switch (*parv[param]) */
+  } /* while (param < parc) */
 
   nickstr[nickpos] = '\0';
   banstr[banpos] = '\0';
@@ -431,21 +573,18 @@ int ms_burst(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
     /* first deal with channel members */
     for (member = chptr->members; member; member = member->next_member) {
       if (member->status & CHFL_BURST_JOINED) { /* joined during burst */
-	if (member->status & CHFL_CHANOP)
-	  modebuf_mode_client(mbuf, MODE_ADD | CHFL_CHANOP, member->user);
-	if (member->status & CHFL_HALFOP)
-          modebuf_mode_client(mbuf, MODE_ADD | CHFL_HALFOP, member->user);
-	if (member->status & CHFL_VOICE)
-	  modebuf_mode_client(mbuf, MODE_ADD | CHFL_VOICE, member->user);
+	if ((member->status & CHFL_CHANOP) && !(member->status & CHFL_BURST_ALREADY_OPPED))
+	  modebuf_mode_client(mbuf, MODE_ADD | CHFL_CHANOP, member->user, OpLevel(member));
+	if ((member->status & CHFL_VOICE) && !(member->status & CHFL_BURST_ALREADY_VOICED))
+	  modebuf_mode_client(mbuf, MODE_ADD | CHFL_VOICE, member->user, OpLevel(member));
       } else if (parse_flags & MODE_PARSE_WIPEOUT) { /* wipeout old ops */
 	if (member->status & CHFL_CHANOP)
-	  modebuf_mode_client(mbuf, MODE_DEL | CHFL_CHANOP, member->user);
-	if (member->status & CHFL_HALFOP)
-          modebuf_mode_client(mbuf, MODE_DEL | CHFL_HALFOP, member->user);
+	  modebuf_mode_client(mbuf, MODE_DEL | CHFL_CHANOP, member->user, OpLevel(member));
 	if (member->status & CHFL_VOICE)
-	  modebuf_mode_client(mbuf, MODE_DEL | CHFL_VOICE, member->user);
-	member->status = ((member->status & ~(CHFL_CHANOP | CHFL_HALFOP | CHFL_VOICE)) |
-			  CHFL_DEOPPED);
+	  modebuf_mode_client(mbuf, MODE_DEL | CHFL_VOICE, member->user, OpLevel(member));
+	member->status = (member->status
+                          & ~(CHFL_CHANNEL_MANAGER | CHFL_CHANOP | CHFL_VOICE))
+			 | CHFL_DEOPPED;
       }
     }
 
@@ -455,19 +594,19 @@ int ms_burst(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
       lp = *lp_p;
 
       /* remove ban from channel */
-      if (lp->flags & (CHFL_BAN_OVERLAPPED | CHFL_BURST_BAN_WIPEOUT)) {
+      if (lp->flags & (BAN_OVERLAPPED | BAN_BURST_WIPEOUT)) {
+        char *bandup;
+        DupString(bandup, lp->banstr);
 	modebuf_mode_string(mbuf, MODE_DEL | MODE_BAN,
-			    lp->value.ban.banstr, 1); /* let it free banstr */
-
+			    bandup, 1);
 	*lp_p = lp->next; /* clip out of list */
-	MyFree(lp->value.ban.who); /* free who */
-	free_link(lp); /* free ban */
+        free_ban(lp);
 	continue;
-      } else if (lp->flags & CHFL_BURST_BAN) /* add ban to channel */
+      } else if (lp->flags & BAN_BURSTED) /* add ban to channel */
 	modebuf_mode_string(mbuf, MODE_ADD | MODE_BAN,
-			    lp->value.ban.banstr, 0); /* don't free banstr */
+			    lp->banstr, 0); /* don't free banstr */
 
-      lp->flags &= (CHFL_BAN | CHFL_BAN_IPMASK); /* reset the flag */
+      lp->flags &= BAN_IPMASK; /* reset the flag */
       lp_p = &(*lp_p)->next;
     }
   }

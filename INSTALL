@@ -1,8 +1,9 @@
-			-- [ -> IrcDreams v2 <- ] --
-					ircu2.10.11.07+IrcDreams2
+
+			-- [ -> IRCODERZ v2 <- ] --
+					ircu2.10.12+coderz
 		--< INSTALL >--
 
-Bienvenue dans le fichier d'aide à l'installation du projet IrcDreams.
+Bienvenue dans le fichier d'aide à l'installation du projet IrCoderz.
 Il est conseillé de lire le fichier README avant d'effectuer les opérations de ce fichier.
 
 Sommaire :
@@ -15,48 +16,56 @@ Sommaire :
 1) téléchargement
 =================
 Tapez ça dans votre shell :
-$ cvs -d:pserver:cvs@ircdreams.org:/cvsroot/Dreams co IrcDreams2
-Vous pouvez maintenant vous déplacer dans le dossier IrcDreams2 avec :
-$ cd IrcDreams2/
+$ cvs -d:pserver:anonymous@cvs.sourceforge.net:/cvsroot/ircoderz login
+Appuyez sur -Entrée- lors de la demande de pass
+$ cvs -d:pserver:anonymous@cvs.sourceforge.net:/cvsroot/ircoderz co ircoderz2
+Vous pouvez maintenant vous déplacer dans le dossier ircoderz avec :
+$ cd ircoderz/
 
 2) ./configure
 ==============
 Tapez :
 $ ./configure --prefix=<chemin où sera installé l'ircd>
-Si vous voulez installé l'ircd, par exemple, dans /home/moi/ircd, tapez ça :
-$ ./configure --prefix=/home/moi/ircd
-Si vous avez des problèmes avec cette ligne, contactez moi à bugs@ircdreams.org
+Si vous voulez installé l'ircd, par exemple, dans /home/sex/ircd, tapez ça :
+$ ./configure --prefix=/home/sex/ircd
+Si vous avez des problèmes avec cette ligne, contactez moi à progs@headfucking.net
 
-3) make (ou gmake sur *BSD)
+3) make
 ===============
 Tapez :
-$ make && make install (ou gmake && gmake install sous *BSD)
+$ make install
+Veuillez patienter pendant la compilation. Si une quelquonque erreur apparaît, merci
+de nous en faire part, voir le fichier BUGS.
 
 4) ircd.conf
 ============
 Maintenant vous allez devoir configuré votre daemon irc. Pour ce faire, tapez:
 $ cd <chemin où vous avez installé l'ircd>/lib
-Si vous l'avez installé dans /home/moi/ircd, tapez:
-$ cd /home/sex/moi/lib
+Si vous l'avez installé dans /home/sex/ircd, tapez:
+$ cd /home/sex/ircd/lib
 Tapez maintenant:
 $ cp example.conf ircd.conf
-Maintenant éditez depuis un éditeur tel que pico, nano, vi ou encore emacs
-IMPORTANT : Il est completement déconseillé d'editer votre configuration avec un éditeur texte de Windows !
-une alerte a été émise par les devellopeurs d'ircu: http://sourceforge.net/forum/forum.php?forum_id=249864
-
-Les indications contenues dans le fichier example.conf vous aideront à configurer.
+Maintenant éditez depuis un éditeur tel que pico, nano, vi ou encore emacs. Les indications contenues
+dans ce fichier vous aideront à configurer.
+Pour les F line, vous devez enlever les # quand vous en configurez une. Pour de l'aide sur les Flines,
+lisez le fichier ircoderz2/doc/readme.features.
+Il est vivement conseillé de toutes les configurer une à une si vous faites un réseau digne
+de ce nom.
 
 5) lancement
 ============
 Tapez maintenant :
 $ cd ../bin
+$ ./ircd -k
+Vous verrez ainsi si la configuration est correcte, si ce n'est pas le cas vérifiez la, sinon
+tapez :
 $ ./ircd
-Theoriquement si vous avez bien configuré l'ircd, ça devrait marcher. Vous pouvez maintenant jouer sur votre
-tout nouveau serveur.
+Theoriquement si vous avez bien configuré l'ircd, ça devrait marcher. Vous pouvez maintenant jouer sur
+votre tout nouveau serveur.
 
-Si vous voulez de l'aide, vous pouvez aller sur le serveur ircdreams.org salon #ircdreams
-Ou encore par mail, bugs@ircdreams.org
+Si vous voulez de l'aide, vous pouvez aller sur le serveur ircube.org salon #coderz.
+Ou encore par mail, progs@headfucking.net
 
 Bonne utilisation,
 
-BuGs
+Progs

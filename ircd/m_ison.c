@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_ison.c,v 1.3 2005/09/18 15:55:12 bugs Exp $
+ * $Id: m_ison.c,v 1.1.1.1 2005/10/01 17:27:55 progs Exp $
  */
 
 /*
@@ -79,24 +79,25 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "hash.h"
 #include "ircd.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "msgq.h"
 #include "numeric.h"
 #include "send.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <string.h>
 
 /*
  * m_ison
  *
- * Added by Darren Reed 13/8/91 to act as an efficent user indicator
+ * Added by Darren Reed 13/8/91 to act as an efficient user indicator
  * with respect to cpu/bandwidth used. Implemented for NOTIFY feature in
  * clients. Designed to reduce number of whois requests. Can process
  * nicknames in batches as long as the maximum buffer length.
@@ -124,11 +125,12 @@ int m_ison(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
   for (i = 1; i < parc; i++) {
     for (name = ircd_strtok(&p, parv[i], " "); name;
 	 name = ircd_strtok(&p, 0, " ")) {
-      if ((acptr = FindUser(name)) && (!IsHiding(acptr) || IsAnOper(sptr))) {
-		if (msgq_bufleft(mb) < strlen(cli_name(acptr)) + 1) {
-		  send_buffer(sptr, mb, 0); /* send partial response */
-	  	msgq_clean(mb); /* then do another round */
-	  	mb = msgq_make(sptr, rpl_str(RPL_ISON), cli_name(&me),  cli_name(sptr));
+      if ((acptr = FindUser(name))) {
+	if (msgq_bufleft(mb) < strlen(cli_name(acptr)) + 1) {
+	  send_buffer(sptr, mb, 0); /* send partial response */
+	  msgq_clean(mb); /* then do another round */
+	  mb = msgq_make(sptr, rpl_str(RPL_ISON), cli_name(&me),
+			 cli_name(sptr));
 	}
 	msgq_append(0, mb, "%s ", cli_name(acptr));
       }

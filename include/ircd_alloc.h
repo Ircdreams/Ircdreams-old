@@ -1,7 +1,6 @@
 /*
  * IRC - Internet Relay Chat, include/ircd_alloc.h
  * Copyright (C) 1999 Thomas Helvey <tomh@inxpress.net>
- *                   
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,55 +17,65 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  * Commentary by Bleep (Thomas Helvey)
- *
- * $Id: ircd_alloc.h,v 1.1.1.1 2004/02/28 11:10:44 bugs Exp $
+ */
+/** @file
+ * @brief IRC daemon memory allocation functions.
+ * @version $Id: ircd_alloc.h,v 1.1.1.1 2005/10/01 17:26:52 progs Exp $
  */
 #ifndef INCLUDED_ircd_alloc_h
 #define INCLUDED_ircd_alloc_h
 
-#undef FROBONMALLOC
-#undef FROBONFREE
-
 /*
  * memory resource allocation and test functions
  */
+/** Type of handler for out-of-memory conditions. */
 typedef void (*OutOfMemoryHandler)(void);
 extern void set_nomem_handler(OutOfMemoryHandler handler);
 
-#if !defined(MDEBUG)
-/* 
- * RELEASE: allocation functions
- */
+/* The mappings for the My* functions... */
+/** Helper macro for standard allocations. */
+#define MyMalloc(size) \
+  DoMalloc(size, "malloc", __FILE__, __LINE__)
+
+/** Helper macro for zero-initialized allocations. */
+#define MyCalloc(nelem, size) \
+  DoMallocZero((size) * (nelem), "calloc", __FILE__, __LINE__)
+
+/** Helper macro for freeing memory. */
+#define MyFree(p) \
+  if (p) \
+    DoFree(p, __FILE__, __LINE__)
+
+/** Helper macro for reallocating memory. */
+#define MyRealloc(p, size) \
+  DoRealloc(p, size, __FILE__, __LINE__)
+
+/* First version: fast non-debugging macros... */
+#ifndef MDEBUG
 #ifndef INCLUDED_stdlib_h
-#include <stdlib.h>       /* free */
+#include <stdlib.h> /* free */
 #define INCLUDED_stdlib_h
 #endif
 
-#ifdef FROBONFREE
-extern void MyFrobulatingFree(void *x);
-#define MyFree(x) do { MyFrobulatingFree((x)); (x) = 0; } while(0)
-#else
-#define MyFree(x) do { free((x)); (x) = 0; } while(0)
-#endif
+/** Implementation macro for freeing memory. */
+#define DoFree(x, file, line) do { free((x)); (x) = 0; } while(0)
+extern void* DoMalloc(size_t len, const char*, const char*, int);
+extern void* DoMallocZero(size_t len, const char*, const char*, int);
+extern void *DoRealloc(void *, size_t, const char*, int);
 
-extern void* MyMalloc(size_t size);
-extern void* MyCalloc(size_t nelem, size_t size);
-extern void* MyRealloc(void* p, size_t size);
-
+/* Second version: slower debugging versions... */
 #else /* defined(MDEBUG) */
-/*
- * DEBUG: allocation functions
- */
-#ifndef INCLUDED_fda_h
-#include "fda.h"
-#endif
+#include <sys/types.h>
+#include "memdebug.h"
 
-#define MyMalloc(s)     fda_malloc((s), __FILE__, __LINE__)
-#define MyCalloc(n, s)  fda_calloc((n), (s), __FILE__, __LINE__)
-#define MyFree(p)       fda_free((p))
-#define MyRealloc(p, s) fda_realloc((p), (s), __FILE__, __LINE__)
-
+#define DoMalloc(size, type, file, line) \
+  dbg_malloc(size, type, file, line)
+#define DoMallocZero(size, type, file, line) \
+  dbg_malloc_zero(size, type, file, line)
+#define DoFree(p, file, line) \
+  do { dbg_free(p, file, line); (p) = 0; } while (0)
+#define DoRealloc(p, size, file, line) \
+  dbg_realloc(p, size, file, line)
 #endif /* defined(MDEBUG) */
 
 #endif /* INCLUDED_ircd_alloc_h */
-

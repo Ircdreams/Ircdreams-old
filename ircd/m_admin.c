@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_admin.c,v 1.2 2005/01/24 01:52:33 bugs Exp $
+ * $Id: m_admin.c,v 1.1.1.1 2005/10/01 17:27:47 progs Exp $
  */
 
 /*
@@ -79,12 +79,13 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "hash.h"
 #include "ircd.h"
 #include "ircd_features.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "msg.h"
 #include "numeric.h"
@@ -92,7 +93,7 @@
 #include "s_conf.h"
 #include "s_user.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 
 static int send_admin_info(struct Client* sptr)
 {
@@ -120,7 +121,7 @@ int m_admin(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   assert(0 != cptr);
   assert(cptr == sptr);
 
-  if (parc > 1 && (!(acptr = find_match_server(parv[1])) || !IsMe(acptr)))
+  if (parc > 1  && (!(acptr = find_match_server(parv[1])) || !IsMe(acptr)))
     return send_reply(sptr, ERR_NOPRIVILEGES);
 
   return send_admin_info(sptr);
@@ -138,7 +139,7 @@ int mo_admin(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   assert(cptr == sptr);
 
   if (hunt_server_cmd(sptr, CMD_ADMIN, cptr, feature_int(FEAT_HIS_REMOTE), 
-		      ":%C", 1,	parc, parv) != HUNTED_ISME)
+                      ":%C", 1, parc, parv) != HUNTED_ISME)
     return 0;
   return send_admin_info(sptr);
 }

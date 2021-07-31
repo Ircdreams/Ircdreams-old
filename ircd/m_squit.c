@@ -20,14 +20,15 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_squit.c,v 1.3 2005/01/24 01:19:23 bugs Exp $
+ * $Id: m_squit.c,v 1.1.1.1 2005/10/01 17:28:11 progs Exp $
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "hash.h"
 #include "ircd.h"
 #include "ircd_chattr.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "numeric.h"
@@ -38,7 +39,7 @@
 #include "s_user.h"
 #include "send.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -82,18 +83,19 @@ int ms_squit(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   }
   
   /* If they are squitting me, we reverse it */
-  if (IsMe(acptr)) {
+  if (IsMe(acptr))
     acptr = cptr; /* Bugfix by Prefect */
-  }
-  if (parc>2)
-  timestamp = atoi(parv[2]);
+
+  if (parc > 2)
+    timestamp = atoi(parv[2]);
   else
-   protocol_violation(cptr, "SQUIT with no timestamp/reason");  
+    protocol_violation(cptr, "SQUIT with no timestamp/reason");
 
   /* If atoi(parv[2]) == 0 we must indeed squit !
    * It will be our neighbour.
    */
-  if ( timestamp != 0 && timestamp != cli_serv(acptr)->timestamp) {
+  if ( timestamp != 0 && timestamp != cli_serv(acptr)->timestamp)
+  {
     Debug((DEBUG_NOTICE, "Ignoring SQUIT with the wrong timestamp"));
     return 0;
   }
@@ -126,7 +128,7 @@ int mo_squit(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 
   server = parv[1];
   /*
-   * The following allows wild cards in SQUIT. Only usefull
+   * The following allows wild cards in SQUIT. Only useful
    * when the command is issued by an oper.
    */
   for (acptr = GlobalClientList; (acptr = next_client(acptr, server));
@@ -141,7 +143,7 @@ int mo_squit(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 
   /*
    * Look for a matching server that is closer,
-   * that way we won't accidently squit two close
+   * that way we won't accidentally squit two close
    * servers like davis.* and davis-r.* when typing
    * /SQUIT davis*
    */
@@ -150,5 +152,9 @@ int mo_squit(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
     if (!match(server, cli_name(acptr2)))
       acptr = acptr2;
   
+  /* Disallow local opers to squit remote servers */
+  if (IsLocOp(sptr) && !MyConnect(acptr))
+    return send_reply(sptr, ERR_NOPRIVILEGES);
+
   return exit_client(cptr, acptr, sptr, comment);
 }

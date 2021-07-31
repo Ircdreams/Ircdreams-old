@@ -1,7 +1,6 @@
-/*
- * s_misc.h
- *
- * $Id: s_misc.h,v 1.3 2005/02/26 02:55:51 bugs Exp $
+/** @file s_misc.h
+ * @brief Miscellaneous support functions and declarations.
+ * @version $Id: s_misc.h,v 1.1.1.1 2005/10/01 17:27:01 progs Exp $
  */
 #ifndef INCLUDED_s_misc_h
 #define INCLUDED_s_misc_h
@@ -23,39 +22,52 @@ struct ConfItem;
  * Macros
  */
 
+/** Return value from various functions to indicate the source has
+ * been disconnected. */
 #define CPTR_KILLED     -2
 
 /*
  * Structures
  */
 
+#ifdef HAVE_INTTYPES_H
+# ifndef INCLUDED_inttypes_h
+#  include <inttypes.h>
+#  define INCLUDED_inttypes_h
+# endif
+#else
+# ifdef HAVE_STDINT_H
+#  ifndef INCLUDED_stdint_h
+#   include <stdint.h>
+#   define INCLUDED_stdint_h
+#  endif
+# endif
+#endif
+
+/** Structure used to count many server-wide statistics. */
 struct ServerStatistics {
-  unsigned int is_cl;           /* number of client connections */
-  unsigned int is_sv;           /* number of server connections */
-  unsigned int is_ni;           /* connection but no idea who it was */
-  unsigned short int is_cbs;    /* bytes sent to clients */
-  unsigned short int is_cbr;    /* bytes received to clients */
-  unsigned short int is_sbs;    /* bytes sent to servers */
-  unsigned short int is_sbr;    /* bytes received to servers */
-  unsigned int is_cks;          /* k-bytes sent to clients */
-  unsigned int is_ckr;          /* k-bytes received to clients */
-  unsigned int is_sks;          /* k-bytes sent to servers */
-  unsigned int is_skr;          /* k-bytes received to servers */
-  time_t is_cti;                /* time spent connected by clients */
-  time_t is_sti;                /* time spent connected by servers */
-  unsigned int is_ac;           /* connections accepted */
-  unsigned int is_ref;          /* accepts refused */
-  unsigned int is_unco;         /* unknown commands */
-  unsigned int is_wrdi;         /* command going in wrong direction */
-  unsigned int is_unpf;         /* unknown prefix */
-  unsigned int is_empt;         /* empty message */
-  unsigned int is_num;          /* numeric message */
-  unsigned int is_kill;         /* number of kills generated on collisions */
-  unsigned int is_fake;         /* MODE 'fakes' */
-  unsigned int is_asuc;         /* successful auth requests */
-  unsigned int is_abad;         /* bad auth requests */
-  unsigned int is_loc;          /* local connections made */
-  unsigned int uping_recv;      /* UDP Pings received */
+  unsigned int is_cl;           /**< number of client connections */
+  unsigned int is_sv;           /**< number of server connections */
+  unsigned int is_ni;           /**< connection but no idea who it was */
+  uint64_t is_cbs;              /**< bytes sent to clients */
+  uint64_t is_cbr;              /**< bytes received to clients */
+  uint64_t is_sbs;              /**< bytes sent to servers */
+  uint64_t is_sbr;              /**< bytes received to servers */
+  uint64_t is_cti;              /**< time spent connected by clients */
+  uint64_t is_sti;              /**< time spent connected by servers */
+  unsigned int is_ac;           /**< connections accepted */
+  unsigned int is_ref;          /**< accepts refused */
+  unsigned int is_unco;         /**< unknown commands */
+  unsigned int is_wrdi;         /**< command going in wrong direction */
+  unsigned int is_unpf;         /**< unknown prefix */
+  unsigned int is_empt;         /**< empty message */
+  unsigned int is_num;          /**< numeric message */
+  unsigned int is_kill;         /**< number of kills generated on collisions */
+  unsigned int is_fake;         /**< MODE 'fakes' */
+  unsigned int is_asuc;         /**< successful auth requests */
+  unsigned int is_abad;         /**< bad auth requests */
+  unsigned int is_loc;          /**< local connections made */
+  unsigned int uping_recv;      /**< UDP Pings received */
 };
 
 /*
@@ -64,7 +76,6 @@ struct ServerStatistics {
 
 extern int check_registered(struct Client *sptr);
 extern int check_registered_user(struct Client *sptr);
-extern void exit_one_client(struct Client *bcptr, const char *comment);
 extern int exit_client(struct Client *cptr, struct Client *bcptr,
     struct Client *sptr, const char *comment);
 extern char *myctime(time_t value);
@@ -72,15 +83,12 @@ extern int exit_client_msg(struct Client *cptr, struct Client *bcptr,
                            struct Client *sptr, const char *pattern, ...);
 extern void initstats(void);
 extern char *date(time_t clock);
-extern const char* get_client_host(const struct Client *cptr);
-extern void get_sockhost(struct Client *cptr, char *host);
 extern int vexit_client_msg(struct Client *cptr, struct Client *bcptr,
     struct Client *sptr, const char *pattern, va_list vl);
-extern void tstats(struct Client *cptr, struct StatDesc *sd, int stat,
-		   char *param);
+extern void tstats(struct Client *cptr, const struct StatDesc *sd,
+                   char *param);
 
 extern struct ServerStatistics* ServerStats;
-extern int admin_sendmail(const char *parv);
 
 #endif /* INCLUDED_s_misc_h */
 

@@ -1,0 +1,6 @@
+
+/* end dbprim_err.h -*- c -*- */
+
+/* @(#)$Id: dbprim.h.bot,v 1.1.1.1 2005/10/01 17:29:12 progs Exp $ */
+
+#endif /* __include_dbprim_h__ */

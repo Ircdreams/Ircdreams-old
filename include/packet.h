@@ -1,7 +1,6 @@
-/*
- * packet.h
- *
- * $Id: packet.h,v 1.1.1.1 2004/02/28 11:11:06 bugs Exp $
+/** @file packet.h
+ * @brief Declarations for packet handling functions.
+ * @version $Id: packet.h,v 1.1.1.1 2005/10/01 17:26:59 progs Exp $
  */
 #ifndef INCLUDED_packet_h
 #define INCLUDED_packet_h

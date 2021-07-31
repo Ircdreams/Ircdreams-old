@@ -1,7 +1,7 @@
 /*
  * version.h
  *
- * $Id: version.h,v 1.1.1.1 2004/02/28 11:11:19 bugs Exp $
+ * $Id: version.h,v 1.1.1.1 2005/10/01 17:27:02 progs Exp $
  */
 #ifndef INCLUDED_version_h
 #define INCLUDED_version_h

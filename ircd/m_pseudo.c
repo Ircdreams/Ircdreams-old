@@ -19,7 +19,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_pseudo.c,v 1.6 2006/01/28 16:00:43 bugs Exp $
+ * $Id: m_pseudo.c,v 1.1.1.1 2005/10/01 17:28:06 progs Exp $
  */
 
 /*
@@ -95,8 +95,8 @@
 #include "numnicks.h"
 #include "s_conf.h"
 #include "s_user.h"
-#include <string.h>
-#include <assert.h>
+
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 
 /*
  * m_pseudo - generic service message handler
@@ -107,9 +107,9 @@
  */
 int m_pseudo(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 {
-  char *text, buffer[BUFSIZE], *dest, mask[NICKLEN + HOSTLEN + 1];
-  struct Client* acptr;
+  char *text, buffer[BUFSIZE];
   struct s_map *map;
+  struct nick_host *nh;
 
   assert(0 != cptr);
   assert(cptr == sptr);
@@ -126,22 +126,25 @@ int m_pseudo(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   map = (struct s_map *)parv[1];
   assert(0 != map);
 
-  if (map->prepend && strcasecmp(map->prepend, "*")) {
-    ircd_snprintf(0, buffer, sizeof(buffer) - 1, "%s %s", map->prepend, text);
+  if (map->prepend) {
+    ircd_snprintf(0, buffer, sizeof(buffer) - 1, "%s%s", map->prepend, text);
     buffer[sizeof(buffer) - 1] = 0;
     text = buffer;
   }
 
-  strcpy(mask,map->nick);
-  strcat(mask, "@");
-  strcat(mask,map->serveur);
-  dest = strchr(mask, '@');
+  for (nh = map->services; nh; nh = nh->next) {
+    struct Client *target, *server;
 
-  acptr = FindUser(map->nick);
-  /* check si map->nick exist et si il est bien sur map->serveur */
-  if (!acptr || strcasecmp(cli_name(cli_user(acptr)->server), map->serveur))
-    return send_reply(sptr, ERR_SERVICESDOWN, mask);
+    if (NULL == (server = FindServer(nh->nick + nh->nicklen + 1)))
+      continue;
+    nh->nick[nh->nicklen] = '\0';
+    if ((NULL == (target = FindUser(nh->nick)))
+        || (server != cli_user(target)->server))
+      continue;
+    nh->nick[nh->nicklen] = '@';
+    relay_directed_message(sptr, nh->nick, nh->nick + nh->nicklen, text);
+    return 0;
+  }
 
-  relay_directed_message(sptr, mask, dest, text);
-  return 0;
+  return send_reply(sptr, ERR_SERVICESDOWN, map->name);
 }

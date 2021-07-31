@@ -19,8 +19,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: userload.h,v 1.1.1.1 2004/02/28 11:11:19 bugs Exp $
+ */
+/** @file
+ * @brief Userload tracking and statistics.
+ * @version $Id: userload.h,v 1.1.1.1 2005/10/01 17:27:02 progs Exp $
  */
 #ifndef INCLUDED_userload_h
 #define INCLUDED_userload_h
@@ -32,10 +34,11 @@ struct StatDesc;
  * Structures
  */
 
+/** Tracks load of various types of users. */
 struct current_load_st {
-  unsigned int client_count;
-  unsigned int local_count;
-  unsigned int conn_count;
+  unsigned int client_count; /**< Count of locally connected clients. */
+  unsigned int local_count; /**< This field is updated but apparently meaningless. */
+  unsigned int conn_count; /**< Locally connected clients plus servers. */
 };
 
 /*
@@ -43,8 +46,8 @@ struct current_load_st {
  */
 
 extern void update_load(void);
-extern void calc_load(struct Client *sptr, struct StatDesc *sd, int stat,
-		      char *param);
+extern void calc_load(struct Client *sptr, const struct StatDesc *sd,
+                      char *param);
 extern void initload(void);
 
 extern struct current_load_st current_load;

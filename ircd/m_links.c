@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_links.c,v 1.4 2005/01/24 01:52:33 bugs Exp $
+ * $Id: m_links.c,v 1.1.1.1 2005/10/01 17:27:59 progs Exp $
  */
 
 /*
@@ -79,12 +79,13 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "ircd.h"
 #include "ircd_defs.h"
 #include "ircd_features.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "match.h"
@@ -93,9 +94,9 @@
 #include "numnicks.h"
 #include "s_user.h"
 #include "send.h"
-#include "ircd_struct.h"
+#include "struct.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 
 /*
  * m_links - generic message handler
@@ -114,54 +115,14 @@ int m_links(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   char *mask;
   struct Client *acptr;
 
-  if (feature_bool(FEAT_HIS_LINKS) && !IsAnOper(sptr)) {
+  if (feature_bool(FEAT_HIS_LINKS) && !IsAnOper(sptr))
+  {
     send_reply(sptr, RPL_ENDOFLINKS, parc < 2 ? "*" : parv[1]);
     sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :%s %s", sptr,
-		  "/LINKS a été désactivé.  Visitez ",
-		  feature_str(FEAT_HIS_URLSERVERS));
+                  "/LINKS has been disabled, from CFV-165.  Visit ", 
+                  feature_str(FEAT_HIS_URLSERVERS));
     return 0;
   }
-
-  if (parc > 2) {
-    if (hunt_server_cmd(sptr, CMD_LINKS, cptr, 1, "%C :%s", 1, parc,
-                        parv) != HUNTED_ISME)
-      return 0;
-    mask = parv[2];
-  }
-  else
-    mask = parc < 2 ? 0 : parv[1];
-
-  for (acptr = GlobalClientList, collapse(mask); acptr; acptr = cli_next(acptr))
-  {
-    if (!IsServer(acptr) && !IsMe(acptr))
-      continue;
-    if (!BadPtr(mask) && match(mask, cli_name(acptr)))
-      continue;
-    send_reply(sptr, RPL_LINKS, cli_name(acptr), cli_name(cli_serv(acptr)->up),
-        cli_hopcount(acptr), cli_serv(acptr)->prot,
-        ((cli_info(acptr))[0] ? cli_info(acptr) : "(Unknown Location)"));
-  }
-
-  send_reply(sptr, RPL_ENDOFLINKS, BadPtr(mask) ? "*" : mask);
-  return 0;
-}
-
-/*
- * ms_links - server message handler
- *
- * parv[0] = sender prefix
- * parv[1] = servername mask
- *
- * or
- *
- * parv[0] = sender prefix
- * parv[1] = server to query
- * parv[2] = servername mask
- */
-int ms_links(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
-{
-  char *mask;
-  struct Client *acptr;
 
   if (parc > 2)
   {
@@ -185,5 +146,49 @@ int ms_links(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   }
 
   send_reply(sptr, RPL_ENDOFLINKS, BadPtr(mask) ? "*" : mask);
+
   return 0;
 }
+
+/*
+ * ms_links - server message handler
+ *
+ * parv[0] = sender prefix
+ * parv[1] = servername mask
+ *
+ * or
+ *
+ * parv[0] = sender prefix
+ * parv[1] = server to query
+ * parv[2] = servername mask
+ */
+int
+ms_links(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
+ {
+   char *mask;
+   struct Client *acptr;
+
+   if (parc > 2)
+   {
+     if (hunt_server_cmd(sptr, CMD_LINKS, cptr, 1, "%C :%s", 1, parc, parv) !=
+         HUNTED_ISME)
+       return 0;
+     mask = parv[2];
+   }
+   else
+     mask = parc < 2 ? 0 : parv[1];
+ 
+   for (acptr = GlobalClientList, collapse(mask); acptr; acptr = cli_next(acptr))
+   {
+     if (!IsServer(acptr) && !IsMe(acptr))
+       continue;
+     if (!BadPtr(mask) && match(mask, cli_name(acptr)))
+       continue;
+     send_reply(sptr, RPL_LINKS, cli_name(acptr), cli_name(cli_serv(acptr)->up),
+                cli_hopcount(acptr), cli_serv(acptr)->prot,
+                ((cli_info(acptr))[0] ? cli_info(acptr) : "(Unknown Location)"));
+   }
+ 
+   send_reply(sptr, RPL_ENDOFLINKS, BadPtr(mask) ? "*" : mask);
+   return 0;
+ }

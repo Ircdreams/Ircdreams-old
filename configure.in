@@ -19,15 +19,14 @@ dnl You should have received a copy of the GNU General Public License
 dnl along with this program; if not, write to the Free Software
 dnl Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 dnl
-dnl $Id: configure.in,v 1.11 2005/02/14 12:02:13 bugs Exp $
+dnl $Id: configure.in,v 1.3 2005/10/23 14:00:43 progs Exp $
 
 dnl Make sure we are in the correct directory (someone could have run
 dnl 'configure' with a wrong '--srcdir').
-AC_INIT
-AC_CONFIG_SRCDIR([ircd/ircd.c])
+AC_INIT(ircd/ircd.c)
 
 dnl Set the default prefix
-AC_PREFIX_DEFAULT([$HOME])
+AC_PREFIX_DEFAULT([$HOME/ircd])
 AC_MSG_CHECKING([for installation prefix])
 AC_CACHE_VAL(unet_cv_prefix, [unet_cv_prefix=$HOME])
 if test x"$prefix" != xNONE; then
@@ -42,8 +41,8 @@ ac_default_prefix=$unet_cv_prefix
 dnl Define the input and output configuration header file.
 AC_CONFIG_HEADER([config.h])
 
-dnl Demand at least version 2.57 of autoconf
-AC_PREREQ(2.57)
+dnl Demand at least version 2.59 of autoconf (for AS_HELP_STRING)
+AC_PREREQ(2.59)
 
 dnl Find out what type of system we are
 AC_CANONICAL_HOST
@@ -53,50 +52,6 @@ AC_PROG_CC
 
 dnl ANSIfy the C compiler whenever possible.
 AM_PROG_CC_STDC
-dnl Use -O3 instead of -O2.
-if test x"$CFLAGS" != x; then
-    CFLAGS=`echo "$CFLAGS" | sed -e 's/-O2/-O3/'`
-fi
-dnl Remove -pipe during configure
-if test x"$CFLAGS" != x; then
-    CFLAGS=`echo "$CFLAGS" | sed -e 's/-pipe//g'`
-fi
-dnl Notice the -g flag and deal accordingly
-if test x"$CFLAGS" != x; then
-    unet_old_cflags=$CFLAGS
-    CFLAGS=`echo "$CFLAGS" | sed -e 's/-g//g'`
-fi
-if test x"$CFLAGS" != x"$unet_old_cflags"; then
-    # If -g was already there, force symbols to be enabled
-    unet_cv_enable_symbols=yes
-fi
-dnl Notice the -pg flag and deal accordingly
-if test x"$CFLAGS" != x; then
-    unet_old_cflags=$CFLAGS
-    CFLAGS=`echo "$CFLAGS" | sed -e 's/-pg//g'`
-fi
-if test x"$CFLAGS" != x"$unet_old_cflags"; then
-    # If -pg was already there, force profiling to be enabled
-    unet_cv_enable_profile=yes
-fi
-dnl Notice the -Wall flag and deal accordingly
-if test x"$CFLAGS" != x; then
-    unet_old_cflags=$CFLAGS
-    CFLAGS=`echo "$CFLAGS" | sed -e 's/-Wall//g'`
-fi
-if test x"$CFLAGS" != x"$unet_old_cflags"; then
-    # If -Wall was already there, force warnings to be enabled
-    unet_cv_enable_warnings=yes
-fi
-dnl Notice the -pedantic flag and deal accordingly
-if test x"$CFLAGS" != x; then
-    unet_old_cflags=$CFLAGS
-    CFLAGS=`echo "$CFLAGS" | sed -e 's/-pedantic//g'`
-fi
-if test x"$CFLAGS" != x"$unet_old_cflags"; then
-    # If -pedantic was already there, force pedatic to be enabled
-    unet_cv_enable_pedantic=yes
-fi
 
 dnl Checks for libraries.
 
@@ -107,36 +62,49 @@ AC_SEARCH_LIBS(crypt, descrypt crypt, ,
 dnl Do all the checks necessary to figure out -lnsl / -lsocket stuff
 AC_LIBRARY_NET
 
-dnl Look for res_mkquery.  Done after AC_LIBRARY_NET in case res_mkquery
-dnl is in one of those libraries somewhere.
-AC_SEARCH_LIBS(__res_mkquery, resolv, ,
-[AC_MSG_ERROR([Unable to find library containing res_mkquery()])])
-
 dnl Checks for header files.
 AC_HEADER_STDC
-AC_CHECK_HEADERS([arpa/inet.h crypt.h fcntl.h inttypes.h limits.h netdb.h netinet/in.h poll.h stddef.h stdlib.h string.h sys/devpoll.h sys/event.h  sys/epoll.h sys/file.h sys/ioctl.h sys/param.h sys/socket.h sys/time.h syslog.h unistd.h])
+AC_CHECK_HEADERS(crypt.h poll.h inttypes.h stdint.h sys/devpoll.h sys/epoll.h sys/event.h sys/param.h sys/resource.h sys/socket.h)
 
 dnl Checks for typedefs, structures, and compiler characteristics
-AC_C_CONST
-AC_C_INLINE
+dnl AC_C_CONST
 AC_C_BIGENDIAN
-AC_TYPE_PID_T
 AC_TYPE_SIZE_T
 AC_HEADER_TIME
 AC_STRUCT_TM
 AC_TYPE_UID_T
 unet_CHECK_TYPE_SIZES
-AC_CHECK_TYPES([ptrdiff_t])
+AC_CHECK_TYPE(struct sockaddr_in6, [unet_have_sockaddr_in6="yes"], [unet_have_sockaddr_in6="no"], [#include <sys/types.h>
+#include <netinet/in.h>])
+
+dnl Check for socklen_t.  In traditional BSD this is an int, but some
+dnl OSes use a different type.  Test until we find something that will
+dnl work properly.  Test borrowed from a patch submitted for Python.
+AC_CHECK_TYPE([socklen_t], ,[
+  AC_MSG_CHECKING([for socklen_t equivalent])
+  AC_CACHE_VAL([curl_cv_socklen_t_equiv],
+  [
+dnl Systems have either "struct sockaddr*" or "void*" as second
+dnl arg to getpeername.
+    curl_cv_socklen_t_equiv=
+    for arg2 in "struct sockaddr" void ; do
+      for t in int size_t unsigned long "unsigned long" ; do
+        AC_TRY_COMPILE([#include <sys/types.h>
+#include <sys/socket.h>
+int getpeername (int $arg2 *, $t *);],[$t len;
+  getpeername(0, 0, &len);], [curl_cv_socklen_t_equiv="$t"
+  break])
+      done
+    done
+  ])
+  AC_MSG_RESULT($curl_cv_socklen_t_equiv)
+  AC_DEFINE_UNQUOTED(socklen_t, $curl_cv_socklen_t_equiv,
+      [type to use in place of socklen_t if not defined])],
+  [#include <sys/types.h>
+#include<sys/socket.h>])
 
 dnl Checks for library functions.
-AC_FUNC_FORK
-AC_PROG_GCC_TRADITIONAL
-AC_FUNC_MALLOC
-AC_FUNC_MEMCMP
-AC_FUNC_REALLOC
-AC_FUNC_SELECT_ARGTYPES
-AC_FUNC_VPRINTF
-AC_CHECK_FUNCS([alarm dup2 gettimeofday memmove memset regcomp select socket strchr strdup strerror strrchr strstr strtol strtoul kqueue setrlimit getrusage times])
+AC_CHECK_FUNCS([kqueue setrlimit getrusage times])
 
 dnl Do we have restarting syscalls ?
 AC_SYS_RESTARTABLE_SYSCALLS
@@ -153,11 +121,40 @@ AC_PROG_LN_S
 AC_PATH_PROGS(RMPROG, rm, /bin/rm)
 AC_PATH_PROGS(SHPROG, sh, /bin/sh)
 
+dnl (F)LEX - needed for the new conf file parser
+AC_PROG_LEX
+dnl The autoconf docs say $LEX defaults to 'lex'.  They lie.
+if test "$LEX" = ":" ; then
+  AC_MSG_ERROR([Cannot find flex.])
+elif echo "" | $LEX -V -v --version > /dev/null 2>&1 ; then
+  :
+else
+  AC_MSG_ERROR([Cannot use $LEX as flex.])
+fi
+
+if test -z "$LEXLIB" ; then
+  AC_MSG_FAILURE([Cannot find a library with yywrap() in, but flex was found.
+  It's possible the compiler you're using ($CC) is incompatible with the
+  installed library.])
+fi
+
+LIBS="$LEXLIB $LIBS"
+
+dnl YACC - ditto
+AC_PROG_YACC
+dnl The autoconf docs say $YACC defaults to 'yacc'.  This seems to be true,
+dnl but judging from AC_PROG_LEX, it may not stay true.
+if test "$YACC" = ":" ; then
+  AC_MSG_ERROR([Cannot find yacc.])
+elif echo "" | $YACC -V -v --version > /dev/null 2>&1 ; then
+  :
+else
+dnl byacc does not seem to have any way to test for workingness, so only warn.
+  AC_MSG_WARN([$YACC may not work as yacc.])
+fi
+
 unet_NONBLOCKING
 unet_SIGNALS
-
-dnl Add -pipe when possible
-unet_PIPE_CFLAGS
 
 dnl Check OS for os_dep files.
 AC_MSG_CHECKING(for OS-dependent information)
@@ -165,7 +162,6 @@ case "$host" in
     *-linux*)
 	AC_MSG_RESULT([Linux ($host) found.])
 	unet_poll_syscall=yes
-	OSDEP_C=os_linux.c
 	;;
 
     *-solaris*)
@@ -175,13 +171,11 @@ case "$host" in
 	else
 	    unet_poll_syscall=no
 	fi
-	OSDEP_C=os_solaris.c
 	;;
 
     *-sunos*)
 	AC_MSG_RESULT([Solaris ($host) found.])
 	unet_poll_syscall=no
-	OSDEP_C=os_solaris.c
 	;;
 
     *-openbsd*)
@@ -191,34 +185,28 @@ case "$host" in
 	else
 	    unet_poll_syscall=no
 	fi
-	OSDEP_C=os_openbsd.c
 	;;
 
     *-*bsd*)
 	AC_MSG_RESULT([Generic BSD ($host) found.])
-	CFLAGS="-Wno-long-long $CFLAGS"
 	if test x"$ac_cv_header_poll_h" = xyes; then
 	    unet_poll_syscall=yes
 	else
 	    unet_poll_syscall=no
 	fi
-	OSDEP_C=os_bsd.c
 	;;
 
     *-darwin*)
 	AC_MSG_RESULT([Darwin (Mac OS X) ($host) found.])
 	unet_poll_syscall=no
-	OSDEP_C=os_bsd.c
 	;;
 
     *)
 	AC_MSG_RESULT([Unknown system type $host found.])
 	AC_MSG_WARN([Unknown OS type; using generic routines.])
 	unet_poll_syscall=no
-	OSDEP_C=os_generic.c
 	;;
 esac
-AC_SUBST(OSDEP_C)
 
 dnl Check user configuration options
 dnl Start with --enable-poll
@@ -238,7 +226,7 @@ fi
 AC_MSG_RESULT([$unet_cv_enable_poll])
 
 if test x"$unet_cv_enable_poll" = xyes; then
-    AC_DEFINE([USE_POLL], , [Specify whether or not to use poll()])
+    AC_DEFINE([USE_POLL], 1, [Specify whether or not to use poll()])
     ENGINE_C=engine_poll.c
 else
     ENGINE_C=engine_select.c
@@ -255,7 +243,33 @@ AC_ARG_ENABLE([debug],
 AC_MSG_RESULT([$unet_cv_enable_debug])
 
 if test x"$unet_cv_enable_debug" = xyes; then
-    AC_DEFINE([DEBUGMODE], , [Enable debugging code])
+    AC_DEFINE([DEBUGMODE], 1, [Enable debugging code])
+fi
+
+dnl Now look for --enable-leak-detect
+AC_MSG_CHECKING([whether to enable leak detection])
+AC_ARG_WITH([leak-detect],
+[  --with-leak-detect          Turn on the leak detector(requires patched boehm)],
+[unet_cv_with_leak_detect=$with_leak_detect],
+[AC_CACHE_VAL(unet_cv_with_leak_detect,
+[unet_cv_with_leak_detect=no])])
+AC_MSG_RESULT([$unet_cv_enable_leak_detect])
+
+if test x"$unet_cv_with_leak_detect" != xno; then
+    LIBS="-lgc $LIBS"
+    CFLAGS="-DMDEBUG $CFLAGS"
+    if test x"$unet_cv_with_leak_detect" != xyes; then
+       LIBS="-L$unet_cv_with_leak_detect $LIBS"
+    fi
+fi
+
+AC_ARG_WITH([ipv6],
+    AS_HELP_STRING([--without-ipv6], [disable IPv6 support (default is autodetect)]),
+    [ac_cv_use_ipv6=$withval],
+    [ac_cv_use_ipv6=$unet_have_sockaddr_in6])
+AC_CACHE_CHECK([whether to use IPv6], [ac_cv_use_ipv6], [ac_cv_use_ipv6=no])
+if test x"$ac_cv_use_ipv6" != "xno" ; then
+    AC_DEFINE([IPV6], 1, [Enable IPv6 support])
 fi
 
 dnl And now for --disable-asserts
@@ -268,26 +282,13 @@ AC_ARG_ENABLE([asserts],
 AC_MSG_RESULT([$unet_cv_enable_asserts])
 
 if test x"$unet_cv_enable_asserts" = xno; then
-    AC_DEFINE([NDEBUG], , [Disable assertions])
-fi
-
-dnl Check for --enable-symbols
-AC_MSG_CHECKING([whether to enable debugging symbols])
-AC_ARG_ENABLE([symbols],
-[  --disable-symbols       Disable debugging symbols (remove -g from CFLAGS)],
-[unet_cv_enable_symbols=$enable_symbols],
-[AC_CACHE_VAL(unet_cv_enable_symbols,
-[unet_cv_enable_symbols=yes])])
-AC_MSG_RESULT([$unet_cv_enable_symbols])
-
-if test x"$unet_cv_enable_symbols" = xyes; then
-    CFLAGS="-g $CFLAGS"
+    AC_DEFINE([NDEBUG], 1, [Disable assertions])
 fi
 
 dnl Now check for --enable-profile
 AC_MSG_CHECKING([whether to enable profiling support (gprof)])
 AC_ARG_ENABLE([profile],
-[  --enable-profile        Enable profiling support (add -pg to CFLAGS)],
+[  --enable-profile        Enable profiling support (add -pg to CFLAGS and LDFLAGS)],
 [unet_cv_enable_profile=$enable_profile],
 [AC_CACHE_VAL(unet_cv_enable_profile,
 [unet_cv_enable_profile=no])])
@@ -295,6 +296,7 @@ AC_MSG_RESULT([$unet_cv_enable_profile])
 
 if test x"$unet_cv_enable_profile" = xyes; then
     CFLAGS="-pg $CFLAGS"
+    LDFLAGS="-pg $LDFLAGS"
 fi
 
 dnl Now check for --enable-pedantic
@@ -333,100 +335,8 @@ AC_ARG_ENABLE([inlines],
 AC_MSG_RESULT([$unet_cv_enable_inlines])
 
 if test x"$unet_cv_enable_inlines" = xyes; then
-    AC_DEFINE([FORCEINLINE], , [Force inlining for a few critical functions])
+    AC_DEFINE([FORCEINLINE], 1, [Force inlining for a few critical functions])
 fi
-
-dnl **
-dnl **  SSL Library checks (OpenSSL)
-dnl ** 
-AC_MSG_CHECKING([whether to enable OpenSSL support])
-AC_ARG_ENABLE([ssl],
-[  --enable-ssl            Enable Secure Sockets Layer support],
-[unet_cv_enable_ssl=$enable_ssl],
-[AC_CACHE_VAL(unet_cv_enable_ssl,
-[unet_cv_enable_ssl=no])])
-AC_MSG_RESULT([$unet_cv_enable_ssl])
-
-dnl if test x"$unet_cv_enable_ssl" != xno; then
-dnl 	AC_DEFINE([USE_SSL], , [Define if you are using OpenSSL])
-dnl	SSL_C="ssl.c $SSL_C"
-dnl fi
-
-if test x"$unet_cv_enable_ssl" = xyes; then
-  AC_MSG_CHECKING([for OpenSSL includes])
-  AC_ARG_WITH(openssl-includes,
-  [  --with-openssl-includes Specify location of OpenSSL header files (default /usr/include)],
-  [base_ssl_inc=$withval],
-  [base_ssl_inc=/usr/include])
-  [unet_cv_with_openssl_inc_prefix=$base_ssl_inc]
-  AC_MSG_RESULT([$unet_cv_with_openssl_inc_prefix])
-  AC_DEFINE_UNQUOTED(SSL_INCLUDES_PATH, "$base_ssl_inc",
-  [Path name used as a base for the ssl include files.])
-
-  AC_MSG_CHECKING([for OpenSSL libraries])
-  AC_ARG_WITH(openssl-libs,
-  [  --with-openssl-libs     Specify location of OpenSSL libs (default /usr/lib)],
-  [unet_cv_with_openssl_prefix=$withval],
-  [unet_cv_with_openssl_prefix=/usr/lib])
-  AC_MSG_RESULT([$unet_cv_with_openssl_prefix])
-  AC_DEFINE_UNQUOTED(SSL_LIBS_PATH, "$unet_cv_with_openssl_prefix",
-  [Path name used as a base for the ssl lib files.])
-
-  AC_MSG_CHECKING([for Kerberos includes])
-  AC_ARG_WITH(kerberos-includes,
-  [  --with-kerb-includes    Specify location of Kerberos includes (default /usr/kerberos/include)],
-  [unet_cv_with_kerberos_prefix=$withval],
-  [unet_cv_with_kerberos_prefix=/usr/kerberos/include])
-  AC_MSG_RESULT([$unet_cv_with_kerberos_prefix])
-
-  save_CFLAGS=$CFLAGS;
-  CFLAGS="-lcrypto";
-
-  unet_cv_enable_ssl="no";
-  OPENSSL_LDFLAGS="";
-  AC_CHECK_LIB(ssl, SSL_read, [
-    AC_CHECK_LIB(crypto, X509_new, [
-      AC_CHECK_HEADERS($base_ssl_inc/openssl/ssl.h $base_ssl_inc/openssl/err.h, [
-        unet_cv_enable_ssl="yes";
-        OPENSSL_LDFLAGS="-lssl -lcrypto -lssl"
-        SSL_C=ssl.c
-        AC_SUBST(SSL_C)
-      ])
-    ])
-  ])
-  CFLAGS=$save_CFLAGS
-
-  if test "x$unet_cv_enable_ssl" = xyes; then
-    AC_DEFINE([USE_SSL], , [Define if you are using OpenSSL])
-
-    LIBS="$LIBS -L$unet_cv_with_openssl_prefix $OPENSSL_LDFLAGS"
-    CFLAGS="$CFLAGS -I$unet_cv_with_openssl_inc_prefix -I$unet_cv_with_kerberos_prefix"
-  fi
-fi
-
-dnl dnl SSL/TLS Library checks (GNU TLS)
-dnl if test x"$unet_cv_enable_ssl" = xyes; then
-dnl   unet_cv_enable_ssl="no";
-dnl   AC_CHECK_HEADER(gnutls/gnutls.h,
-dnl    dnl Save the current libraries so the crypto stuff isn't always
-dnl    dnl included...
-dnl    save_LIBS="$LIBS"
-
-dnl    TEST_GNUTLS_LIBS=`libgnutls-config --libs`
-dnl    AC_CHECK_LIB(gnutls, gnutls_init,
-dnl      [SSLLIBS=$TEST_GNUTLS_LIBS
-dnl       unet_cv_enable_ssl="yes"],,
-dnl       $TEST_GNUTLS_LIBS)
-dnl 
-dnl    LIBS=$save_LIBS)
-dnl fi
-
-dnl if test "x$unet_cv_enable_ssl" = xyes; then
-dnl     AC_DEFINE([USE_SSL], , [Define if you are using SSL/TLS])
-dnl     SSL_C=ssl.c
-dnl     AC_SUBST(SSL_C)
-dnl     LIBS="$LIBS $SSLLIBS"
-dnl fi
 
 dnl --disable-devpoll check...
 AC_MSG_CHECKING([whether to enable the /dev/poll event engine])
@@ -443,7 +353,7 @@ fi
 AC_MSG_RESULT([$unet_cv_enable_devpoll])
 
 if test x"$unet_cv_enable_devpoll" != xno; then
-    AC_DEFINE([USE_DEVPOLL], , [Define to enable the /dev/poll engine])
+    AC_DEFINE([USE_DEVPOLL], 1, [Define to enable the /dev/poll engine])
     ENGINE_C="engine_devpoll.c $ENGINE_C"
 fi
 
@@ -459,24 +369,14 @@ if test x"$ac_cv_header_sys_event_h" = xno -o x"$ac_cv_func_kqueue" = xno; then
     unet_cv_enable_kqueue=no
 fi
 
-dnl **
-dnl ** FIXME: KQUEUE + OpenSSL does not work with *BSD at present
-dnl **
-if test x"$unet_cv_enable_ssl" = xyes -a x"$OSDEP_C" = xos_bsd.c; then
-    unet_cv_enable_kqueue=no
-fi
-
 AC_MSG_RESULT([$unet_cv_enable_kqueue])
 
 if test x"$unet_cv_enable_kqueue" != xno; then
-    AC_DEFINE([USE_KQUEUE], , [Define to enable the kqueue engine])
+    AC_DEFINE([USE_KQUEUE], 1, [Define to enable the kqueue engine])
     ENGINE_C="engine_kqueue.c $ENGINE_C"
 fi
 
 dnl --disable-epoll check
-AC_CHECK_LIB(epoll, epoll_create,
-            [have_epoll_lib=yes],
-            have_epoll_lib=no)
 AC_MSG_CHECKING([whether to enable the epoll event engine])
 AC_ARG_ENABLE([epoll],
 [  --disable-epoll         Disable the epoll-based engine],
@@ -484,7 +384,7 @@ AC_ARG_ENABLE([epoll],
 [AC_CACHE_VAL(unet_cv_enable_epoll,
 [unet_cv_enable_epoll=yes])])
 
-if test x"$ac_cv_header_sys_epoll_h" = xno -o x"$ac_cv_func_epoll" = xno -o x"$have_epoll_lib" = xno; then
+if test x"$ac_cv_header_sys_epoll_h" = xno -o x"$ac_cv_func_epoll" = xno; then
     unet_cv_enable_epoll=no
 fi
 
@@ -497,9 +397,28 @@ if test x"$unet_cv_enable_epoll" != xno; then
     AC_LINK_IFELSE([AC_LANG_PROGRAM([#include <sys/epoll.h>], [epoll_create(10);])],
         [AC_MSG_RESULT([yes])],
         [AC_MSG_RESULT([no])
-         AC_DEFINE([EPOLL_NEED_BODY],,[Define to implement epoll system calls])])
-    AC_DEFINE([USE_EPOLL], , [Define to enable the epoll engine])
+         AC_DEFINE([EPOLL_NEED_BODY], 1, [Define to implement epoll system calls])])
+    AC_DEFINE([USE_EPOLL], 1, [Define to enable the epoll engine])
     ENGINE_C="engine_epoll.c $ENGINE_C"
+fi
+
+dnl How to copy one va_list to another?
+AC_CACHE_CHECK([for va_copy], unet_cv_c_va_copy, [AC_LINK_IFELSE(
+  [AC_LANG_PROGRAM([#include <stdarg.h>], [va_list ap1, ap2; va_copy(ap1, ap2);])],
+  [unet_cv_c_va_copy="yes"],
+  [unet_cv_c_va_copy="no"]
+)])
+if test "$unet_cv_c_va_copy" = "yes" ; then
+  AC_DEFINE(HAVE_VA_COPY, 1, [Define if we have va_copy])
+fi
+
+AC_CACHE_CHECK([for __va_copy], unet_cv_c___va_copy, [AC_LINK_IFELSE(
+  [AC_LANG_PROGRAM([#include <stdarg.h>], [va_list ap1, ap2; __va_copy(ap1, ap2);])],
+  [unet_cv_c___va_copy="yes"],
+  [unet_cv_c___va_copy="no"]
+)])
+if test "$unet_cv_c___va_copy" = "yes" ; then
+  AC_DEFINE(HAVE___VA_COPY, 1, [Define if we have __va_copy])
 fi
 
 dnl --with-symlink lets us set the name of the symlink; defaults to "ircd"
@@ -798,11 +717,31 @@ AC_MSG_RESULT([$unet_cv_with_maxcon])
 AC_DEFINE_UNQUOTED(MAXCONNECTIONS, $unet_cv_with_maxcon,
 [Maximum number of network connections])
 
-if test "$host_os" = "cygwin"; then
-  LDFLAGS="-Wl,--enable-auto-import"
-fi
-
 dnl Finally really generate all output files:
-AC_CONFIG_FILES([Makefile ircd/Makefile])
-AC_CONFIG_COMMANDS([default],[[echo timestamp > stamp-h]],[[]])
-AC_OUTPUT
+AC_OUTPUT(Makefile ircd/Makefile ircd/test/Makefile doc/Makefile, [echo timestamp > stamp-h])
+
+dnl Report configuration
+echo "
+ircoderz2 is now hopefully configured for your system.
+
+  Host system:         $host_os
+  Prefix:              $prefix
+  Asserts:             $unet_cv_enable_asserts
+  Warnings:            $unet_cv_enable_warnings
+  Debug:               $unet_cv_enable_debug
+  Profile:             $unet_cv_enable_profile
+  Owner/mode:          $unet_cv_with_owner.$unet_cv_with_group ($unet_cv_with_mode)
+  Chroot:              $unet_cv_with_chroot
+
+  Domain:              $unet_cv_with_domain
+  DPath:               $unet_cv_with_dpath
+  CPath:               $unet_cv_with_cpath
+  LPath:               $unet_cv_with_lpath
+  Maximum connections: $unet_cv_with_maxcon
+
+  poll() engine:       $unet_cv_enable_poll
+  kqueue() engine:     $unet_cv_enable_kqueue
+  /dev/poll engine:    $unet_cv_enable_devpoll
+  epoll() engine:      $unet_cv_enable_epoll
+
+  ipv6:                $ac_cv_use_ipv6"

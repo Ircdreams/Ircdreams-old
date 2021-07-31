@@ -1,4 +1,8 @@
+#! /bin/sh
+
 echo "Extracting ircd/version.c ..."
+
+srcdir=$1
 
 if test -r version.c
 then
@@ -10,29 +14,11 @@ fi
 
 generation=`expr $generation + 1`
 
-sum=sum
-if $sum s_serv.c 1> /dev/null 2>&1; then
-:
-else
-  sum=cksum
-fi
-sumsserv=`$sum s_serv.c 2> /dev/null`;
-sumsuser=`$sum s_user.c 2> /dev/null`;
-sumchan=`$sum channel.c 2> /dev/null`;
-sumsbsd=`$sum s_bsd.c 2> /dev/null`;
-sumhash=`$sum hash.c 2> /dev/null`;
-sumsmisc=`$sum s_misc.c 2> /dev/null`;
-sumircd=`$sum ircd.c 2> /dev/null`;
-
-creation=`date +"%x à %X"`
-
-# cvsversion=`cat ../.patches | \
-#     awk -F. '{ \
-#         if ($(NF)~/\+$/) \
-# 	    printf(".0"); \
-# 	else \
-# 	    printf(".%s", $(NF)); \
-#     }'`
+creation=`date | \
+awk '{if (NF == 6) \
+	 { print $1 " " $2 " " $3 " " $6 " at " $4 " " $5 } \
+else \
+	 { print $1 " " $2 " " $3 " " $7 " at " $4 " " $5 " " $6 }}'`
 
 /bin/cat >version.c <<!SUB!THIS!
 /*
@@ -63,7 +49,7 @@ creation=`date +"%x à %X"`
 
 const char *generation = "$generation";
 const char *creation = "$creation";
-const char *version = BASE_VERSION RELEASE PATCHLEVEL;
+const char *version = BASE_VERSION RELEASE PATCHLEVEL PATCH;
 
 const char *infotext[] = {
     "IRC --",
@@ -75,23 +61,35 @@ const char *infotext[] = {
     "The main developer of version u2.9 and u2.10 was:",
     "Run          Carlo Wood               <carlo@runaway.xs4all.nl>",
     "",
-    "The current head developer of the u2.10 source tree is:",
+    "The head developer of the u2.10 source tree was:",
     "Bleep        Thomas Helvey            <tomh@inxpress.net>",
     "",
-    "Les programmeurs de u2.10.11.04+coderz sont:",
-    "Progs        Romain Bignon            <Progs@Inter-System.Net>",
-    "kouak        Benjamin Beret           <kouak@kouak.org>",
+    "The current maintainors of the u2.10 source tree are:",
+    "Isomer       Perry Lorier             <perry@coders.net>",
+    "Kev          Kevin Mitchell           <klmitch@mit.edu>",
     "",
-    "IrcDreams est une continuation de u2.10.11.06+coderz",
-    "Le programmeur de IrcDreams est:",
-    "BuGs         Cédric Dupont            <bugs@ircdreams.org>",
+    "Les programmeurs de u2.10.12+coderz sont:",
+    "Progs        Romain Bignon            <progs@headfucking.net>",
     "",
     "Thanks goes to all other people who contributed to any version.",
     "A full listing of all coders can be found in doc/Authors in the",
     "source.",
     "",
-    "[$sumsserv] [$sumchan] [$sumsbsd] [$sumsuser]",
-    "[$sumhash] [$sumsmisc] [$sumircd]",
+    "Sources:",
+!SUB!THIS!
+
+for file in ${srcdir}/ircd/*.c ; do
+ echo "    \"[" `./umkpasswd -5 $file` " ]\"," >> version.c
+done;
+
+echo "    \"\"," >> version.c
+echo "    \"Headers:\"," >> version.c
+
+for file in ${srcdir}/include/*.h ; do
+ echo "    \"[" `./umkpasswd -5 $file` " ]\"," >> version.c
+done;
+
+/bin/cat >>version.c <<!SUB!THIS!
     0,
 };
 !SUB!THIS!

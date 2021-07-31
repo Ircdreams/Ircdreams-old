@@ -1,5 +1,5 @@
 /*
- * IRC - Internet Relay Chat, ircd/m_tmpl.c
+ * IRC - Internet Relay Chat, ircd/m_opmode.c
  * Copyright (C) 1990 Jarkko Oikarinen and
  *                    University of Oulu, Computing Center
  * Copyright (C) 2000 Kevin L. Mitchell <klmitch@mit.edu>
@@ -21,7 +21,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_opmode.c,v 1.5 2005/01/24 01:19:23 bugs Exp $
+ * $Id: m_opmode.c,v 1.1.1.1 2005/10/01 17:28:04 progs Exp $
  */
 
 /*
@@ -80,13 +80,14 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "channel.h"
 #include "hash.h"
 #include "ircd.h"
 #include "ircd_features.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "msg.h"
@@ -95,7 +96,7 @@
 #include "send.h"
 #include "s_conf.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 
 /*
  * ms_opmode - server message handler
@@ -107,6 +108,9 @@ int ms_opmode(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 
   if (parc < 3)
     return need_more_params(sptr, "OPMODE");
+
+  if (IsLocalChannel(parv[1]))
+    return 0;
 
   if ('#' != *parv[1] || !(chptr = FindChannel(parv[1])))
     return send_reply(sptr, ERR_NOSUCHCHANNEL, parv[1]);
@@ -121,7 +125,8 @@ int ms_opmode(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   mode_parse(&mbuf, cptr, sptr, chptr, parc - 2, parv + 2,
 	     (MODE_PARSE_SET    | /* Set the modes on the channel */
 	      MODE_PARSE_STRICT | /* Be strict about it */
-	      MODE_PARSE_FORCE), NULL); /* And force them to be accepted */
+	      MODE_PARSE_FORCE),  /* And force them to be accepted */
+	      NULL);
 
   modebuf_flush(&mbuf); /* flush the modes */
 
@@ -135,28 +140,31 @@ int mo_opmode(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 {
   struct Channel *chptr = 0;
   struct ModeBuf mbuf;
-  char *chname, *qreason;
+  char *chname;
+  const char *qreason;
   int force = 0;
 
-  if (!feature_bool(FEAT_OPCLEARMODE))
+  if (!feature_bool(FEAT_CONFIG_OPERCMDS))
     return send_reply(sptr, ERR_DISABLED, "OPMODE");
-
-  /* on oubli pas le Oflag O Progs :p */
-
-  if (MyUser(sptr) && !OpIsGlobal(sptr))
-   return send_reply(sptr, ERR_NOPRIVILEGES);
 
   if (parc < 3)
     return need_more_params(sptr, "OPMODE");
 
   chname = parv[1];
-  if (*chname == '!') {
+  if (*chname == '!')
+  {
     chname++;
+    if (!HasPriv(sptr, IsLocalChannel(chname) ? PRIV_FORCE_LOCAL_OPMODE
+                                              : PRIV_FORCE_OPMODE))
+      return send_reply(sptr, ERR_NOPRIVILEGES);
     force = 1;
   }
-  clean_channelname(chname);
 
-  if (('#' != *chname && '&' != *chname) || !(chptr = FindChannel(chname)))
+  if (!HasPriv(sptr,
+	       IsLocalChannel(chname) ? PRIV_LOCAL_OPMODE : PRIV_OPMODE))
+    return send_reply(sptr, ERR_NOPRIVILEGES);
+
+  if (!IsChannelName(chname) || !(chptr = FindChannel(chname)))
     return send_reply(sptr, ERR_NOSUCHCHANNEL, chname);
 
   if (!force && (qreason = find_quarantine(chptr->chname)))
@@ -171,7 +179,8 @@ int mo_opmode(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 
   mode_parse(&mbuf, cptr, sptr, chptr, parc - 2, parv + 2,
 	     (MODE_PARSE_SET |    /* set the modes on the channel */
-	      MODE_PARSE_FORCE), NULL); /* And force them to be accepted */
+	      MODE_PARSE_FORCE),  /* And force them to be accepted */
+	      NULL);
 
   modebuf_flush(&mbuf); /* flush the modes */
 

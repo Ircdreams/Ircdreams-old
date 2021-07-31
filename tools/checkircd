@@ -1,0 +1,23 @@
+#!/bin/sh
+# Auto-relancement du serveur en cas de plantage de celui-ci, ou si la machine reboot sans prévenir.
+# A lier à crontab
+#
+# $Id: checkircd,v 1.1 2006/03/26 18:00:09 progs Exp $
+
+if test ! "$1" ; then
+  cd ..;
+else
+  if [ -d "$1" ]; then
+    cd $1;
+  else
+    echo "Le répertoire $1 n'exite pas";
+    exit 0;
+  fi
+fi
+cmd=$1/bin/ircd
+if [ -f lib/ircd.pid ] && ! ps -p `cat lib/ircd.pid` >/dev/null 2>&1
+then
+    rm lib/ircd.pid
+    sleep 5
+    $cmd
+fi

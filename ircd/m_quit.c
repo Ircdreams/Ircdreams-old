@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_quit.c,v 1.11 2005/11/27 21:42:26 bugs Exp $
+ * $Id: m_quit.c,v 1.1.1.1 2005/10/01 17:28:08 progs Exp $
  */
 
 /*
@@ -79,18 +79,18 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "channel.h"
 #include "client.h"
-#include "handlers.h"
 #include "ircd.h"
+#include "ircd_log.h"
 #include "ircd_string.h"
-#include "ircd_struct.h"
+#include "struct.h"
 #include "s_misc.h"
 #include "ircd_reply.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <string.h>
 
 /*
@@ -101,32 +101,26 @@
  */
 int m_quit(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 {
-  char *test[3];
   assert(0 != cptr);
   assert(0 != sptr);
   assert(cptr == sptr);
 
-  if (cli_user(sptr) && !IsAnOper(sptr)) {
+  if (cli_user(sptr)) {
     struct Membership* chan;
     for (chan = cli_user(sptr)->channel; chan; chan = chan->next_channel) {
-      if (!IsZombie(chan) && !IsDelayedJoin(chan) && (!member_can_send_to_channel(chan, 0)
-         || (chan->channel->mode.mode & MODE_NOQUITPARTS))) {
-	test[0] = cli_name(sptr);
-	test[1] = chan->channel->chname;
-	m_part(sptr, sptr, 2, test);
-	}
+        if (!IsZombie(chan) && !IsDelayedJoin(chan) && !member_can_send_to_channel(chan, 0))
+        return exit_client(cptr, sptr, sptr, "Signed off");
     }
   }
-
   if (parc > 1 && !BadPtr(parv[parc - 1]))
-	return exit_client_msg(cptr, sptr, sptr, "Quit: %s", parv[parc - 1]);
+    return exit_client_msg(cptr, sptr, sptr, "Quit: %s", parv[parc - 1]);
   else
-	return exit_client(cptr, sptr, sptr, "Déconnexion");
+    return exit_client(cptr, sptr, sptr, "Quit");
 }
 
 
 /*
- * ms_quit - server message handler template
+ * ms_quit - server message handler
  *
  * parv[0] = sender prefix
  * parv[parc - 1] = comment

@@ -1,19 +1,17 @@
 
-			-- [ -> IRCDREAMS <- ] --
-					ircu2.10.11.07+Dreams2
+			-- [ -> IRCODERZ v2 <- ] --
+					ircu2.10.12+coderz
 		--< README >--
 
 IRC, Internet Relay Chat, est un projet datant des années 1990, crée par Jarkko Oikarinen. Repris par
-le "coder-com of Undernet", il a été améliorer pour former, à l'heure actuel, le meilleur
+le "coder-com of Undernet", il a été améliorer pour former, à l'heure actuel, sans doute le meilleur
 IRC daemon au monde, ircu.
 
-Ce projet consite a créé un ircd tres personnalisable et tres controlable et surtout en FRANCAIS !
-Nous avons décidé de prendre la base de ircoderz pour le devellopement de notre projet.
-IrcDreams a donc appliqué divers Patch d'Asuka, de Lain, de SiRVulcaN.
-Divers fonctions des ircd Ircu, IrcProgs, Ircoxyd, Nefarious et Unreal ont été aussi appliqué.
-
-Je tiens a remercier particulierement Cesar, reed et SiRVulcaN qui m'ont autorisé à utiliser leur Patch
-
+L'équipe CoderZ, qui comporte Progs, Cesar et kouak, a décidé de reprendre une version d'ircu pour faire
+une version personnalisée au réseau IRC ircube, dont elle a la charge. Cette version, baptisée
+ircu2.10.12+coderz, ou ircoderz, est disponible au publique depuis http://sf.net/projects/ircoderz/.
+Il est tout de même à noter qu'étant programmé à la base POUR le réseau ircube.org, il n'est pas
+forcément pris en compte de vos paramètres personnels quant à l'utilisation de ce programme.
 
 INSTALLATION:
 
@@ -22,36 +20,51 @@ INSTALLATION:
 COMPATIBILITÉ:
 
 	Cet ircd a été programmé pour supporter le protocole P10, le N2K, et les seuls services
-	compatibles avec sont SDreams, ODreams, PDreams.
+	compatibles avec sont SCoderZ, un projet CoderZ, et GNUWorld d'Undernet, bien que SCoderZ
+	ayant été programmé spécifiquement pour ircoderz, aurra sans doute plus de compatibilité
+	(fonctions ajoutées et supprimée à l'ircd, pouvant destabiliser gnuworld).
+	-> Voir http://sf.net/projects/scoderz/
 
 MISE À JOUR
 
 	Vous avez la possibilité de mettre à jour votre version d'ircoderz de deux manières:
-	- Télécharger depuis le site ircdreams la toute dernière release faite à
-	  http://www.ircdreams.org
-	  
+	- Télécharger depuis le site sourceforge la toute dernière release faite à
+	  http://sf.net/projects/ircoderz/
+
 	- En utilisant CVS.
 		Tapez:
-		  $ make update
+		  $ cvs update -Pd
+
+	Attention: Il est recommandé de mettre à jour à partir d'un package et non à partir des
+	sources cvs ! En effet celles-ci ne sont pas forcément stables, contrairement à un
+	package.
+
+QUOI DE PLUS ?
+
+	Pour savoir quelles sont les fonctions qui se trouvent dans ircoderz et qui n'existent
+	pas dans ircu, veuillez lire le fichier CODERZ.features.
+
 
 PLUS D'INFORMATIONS
 
 	Vous pouvez obtenir plus d'informations à propos de ce daemon irc à l'adresse suivante :
-	http://www.ircdreams.org/
+	http://sf.net/projects/ircoderz/
 
-	Vous pouvez contacter l'équipe a l'adresse suivante :
-	BuGs  <bugs@ircdreams.org> , programmeur IrcDreams
+	Vous pouvez contacter l'équipe aux adresses suivantes :
+	Progs <progs@headfucking.net>, programmeur IrCoderZ et SCoderZ
+	Cesar <Cesar@ircube.org>, programmeur SCoderZ et BonD
+	kouak <kouak@kouak.org>, programmeur IrCoderZ et SCoderZ
 
-	Et pour des informations sur le réseau ircdreams.org #Ircdreams http://www.ircdreams.org
-	
+	Et pour des informations sur le réseau ircube.org, http://www.ircube.org
+
 REMERCIEMENTS
 
-	Bien entendu, ceux ci sont fait à tous les utilisateurs du réseau irc.ircdreams.org qui nous
+	Bien entendu, ceux ci sont fait à tous les utilisateurs du réseau ircube.org qui nous
 	ont permis de tester nos programmes.
 	Et merci à vous de nous avoir fait confiance et d'utiliser nos programmes, ce qui vous
 	permettra de trouver des bugs et de nous contacter pour qu'on puisse les corriger.
 
 Bonne utilisation, et bien sur, "Happy IRCing !"
 
-		-BuGs  <bugst@ircdreams.org>, Programmeur de Dreams (Dreams irc)
-							chef de projet Dreams
+		-Progs <progs@headfucking.net>, programmeur de CoderZ
+						 et chef du projet ircoderz

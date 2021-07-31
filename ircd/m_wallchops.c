@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_wallchops.c,v 1.3 2005/01/31 06:58:27 bugs Exp $
+ * $Id: m_wallchops.c,v 1.2 2005/10/05 16:16:43 progs Exp $
  */
 
 /*
@@ -79,12 +79,13 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "channel.h"
 #include "client.h"
 #include "hash.h"
 #include "ircd.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "msg.h"
@@ -93,7 +94,7 @@
 #include "s_user.h"
 #include "send.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 
 /*
  * m_wallchops - local generic message handler
@@ -114,7 +115,7 @@ int m_wallchops(struct Client* cptr, struct Client* sptr, int parc, char* parv[]
     return send_reply(sptr, ERR_NOTEXTTOSEND);
 
   if (IsChannelName(parv[1]) && (chptr = FindChannel(parv[1]))) {
-    if (client_can_send_to_channel(sptr, chptr, 0)) {
+    if (client_can_send_to_channel(sptr, chptr, 0, parv[parc - 1])) {
       if ((chptr->mode.mode & MODE_NOPRIVMSGS) &&
           check_target_limit(sptr, chptr, chptr->chname, 0))
         return 0;
@@ -143,8 +144,8 @@ int ms_wallchops(struct Client* cptr, struct Client* sptr, int parc, char* parv[
   if (parc < 3 || !IsUser(sptr))
     return 0;
 
-  if ((chptr = FindChannel(parv[1]))) {
-    if (client_can_send_to_channel(sptr, chptr, 0)) {
+  if (!IsLocalChannel(parv[1]) && (chptr = FindChannel(parv[1]))) {
+    if (client_can_send_to_channel(sptr, chptr, 0, parv[parc - 1])) {
       sendcmdto_channel_butone(sptr, CMD_WALLCHOPS, chptr, cptr,
 			       SKIP_DEAF | SKIP_BURST | SKIP_NONOPS,
 			       "%H :%s", chptr, parv[parc - 1]);

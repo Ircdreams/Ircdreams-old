@@ -21,7 +21,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_jupe.c,v 1.2 2005/01/24 01:52:33 bugs Exp $
+ * $Id: m_jupe.c,v 1.1.1.1 2005/10/01 17:27:58 progs Exp $
  */
 
 /*
@@ -80,13 +80,14 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "jupe.h"
 #include "hash.h"
 #include "ircd.h"
 #include "ircd_features.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "match.h"
@@ -96,9 +97,8 @@
 #include "s_conf.h"
 #include "s_misc.h"
 #include "send.h"
-#include "support.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <stdlib.h>
 #include <string.h>
 

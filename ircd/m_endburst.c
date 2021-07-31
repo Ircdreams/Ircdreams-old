@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_endburst.c,v 1.3 2005/01/24 01:52:33 bugs Exp $
+ * $Id: m_endburst.c,v 1.1.1.1 2005/10/01 17:27:54 progs Exp $
  */
 
 /*
@@ -79,12 +79,13 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "channel.h"
 #include "client.h"
 #include "hash.h"
 #include "ircd.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "msg.h"
@@ -92,7 +93,7 @@
 #include "numnicks.h"
 #include "send.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 
 /*
  * ms_end_of_burst - server message handler
@@ -114,7 +115,7 @@ int ms_end_of_burst(struct Client* cptr, struct Client* sptr, int parc, char* pa
   assert(0 != cptr);
   assert(0 != sptr);
 
-  sendto_opmask_butone(0, SNO_NETWORK, "net.burst complété depuis %C.",
+  sendto_opmask_butone(0, SNO_NETWORK, "Completed net.burst from %C.", 
   	sptr);
   sendcmdto_serv_butone(sptr, CMD_END_OF_BURST, cptr, "");
   ClearBurst(sptr);
@@ -125,16 +126,12 @@ int ms_end_of_burst(struct Client* cptr, struct Client* sptr, int parc, char* pa
   /* Count through channels... */
   for (chan = GlobalChannelList; chan; chan = next_chan) {
     next_chan = chan->next;
-
-    if (!chan->members) { /* empty channel */
-      if (!(chan->mode.mode & MODE_BURSTADDED))
-	sendto_opmask_butone(0, SNO_OLDSNO, "Canal vide %H non ajouté par le "
-			     "BURST!", chan);
-
-      sub1_from_channel(chan); /* ok, nuke channel now */
-    }
-
-    chan->mode.mode &= ~MODE_BURSTADDED;
+    if (!chan->members && (chan->mode.mode & MODE_BURSTADDED)) {
+      /* Newly empty channel, schedule it for removal. */
+      chan->mode.mode &= ~MODE_BURSTADDED;
+      sub1_from_channel(chan);
+   } else
+      chan->mode.mode &= ~MODE_BURSTADDED;
   }
 
   return 0;
@@ -153,7 +150,7 @@ int ms_end_of_burst_ack(struct Client *cptr, struct Client *sptr, int parc, char
   if (!IsServer(sptr))
     return 0;
 
-  sendto_opmask_butone(0, SNO_NETWORK, "%C a répondu à la fin du net.burst.",
+  sendto_opmask_butone(0, SNO_NETWORK, "%C acknowledged end of net.burst.",
 		       sptr);
   sendcmdto_serv_butone(sptr, CMD_END_OF_BURST_ACK, cptr, "");
   ClearBurstAck(sptr);

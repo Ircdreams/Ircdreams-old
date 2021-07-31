@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_lusers.c,v 1.8 2005/11/27 21:42:26 bugs Exp $
+ * $Id: m_lusers.c,v 1.1.1.1 2005/10/01 17:28:01 progs Exp $
  */
 
 /*
@@ -79,23 +79,23 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "ircd.h"
 #include "ircd_features.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "msg.h"
 #include "numeric.h"
 #include "numnicks.h"
 #include "querycmds.h"
-#include "s_misc.h"
 #include "s_user.h"
 #include "s_serv.h"
 #include "send.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 
 /*
  * m_lusers - generic message handler
@@ -109,11 +109,11 @@ int m_lusers(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   int longoutput = MyUser(sptr) || IsOper(sptr);
   if (parc > 2)
     if (hunt_server_cmd(sptr, CMD_LUSERS, cptr, feature_int(FEAT_HIS_REMOTE),
-			"%s :%C", 2, parc, parv) != HUNTED_ISME)
+                        "%s :%C", 2, parc, parv) != HUNTED_ISME)
       return 0;
 
-  send_reply(sptr, RPL_LUSERCLIENT, UserStats.clients - UserStats.inv_clients, UserStats.inv_clients, UserStats.servers);
-
+  send_reply(sptr, RPL_LUSERCLIENT, UserStats.clients - UserStats.inv_clients,
+	     UserStats.inv_clients, UserStats.servers);
   if (longoutput && UserStats.opers)
     send_reply(sptr, RPL_LUSEROP, UserStats.opers);
   if (UserStats.unknowns > 0)
@@ -123,12 +123,10 @@ int m_lusers(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   send_reply(sptr, RPL_LUSERME, UserStats.local_clients,
 	     UserStats.local_servers);
 
-  send_reply(sptr, RPL_CURRENT_LOCAL, UserStats.local_clients, UserStats.localclients);
-  send_reply(sptr, RPL_CURRENT_GLOBAL,  UserStats.clients, UserStats.globalclients);
+  sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Highest connection count: "
+		"%d (%d clients)", sptr, max_connection_count,
+		max_client_count);
 
-  sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Maximum de connexion reçues: "
-		"%d (%d clients) (%d connexions reçues au total depuis le %s)", sptr, max_connection_count,
-		max_client_count, UserStats.conncount, date(cli_firsttime(&me))); 
   return 0;
 }
 
@@ -147,8 +145,8 @@ int ms_lusers(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
         HUNTED_ISME)
       return 0;
 
-  send_reply(sptr, RPL_LUSERCLIENT, UserStats.clients - UserStats.inv_clients, UserStats.inv_clients, UserStats.servers);
-
+  send_reply(sptr, RPL_LUSERCLIENT, UserStats.clients - UserStats.inv_clients,
+	     UserStats.inv_clients, UserStats.servers);
   if (longoutput && UserStats.opers)
     send_reply(sptr, RPL_LUSEROP, UserStats.opers);
   if (UserStats.unknowns > 0)
@@ -158,11 +156,9 @@ int ms_lusers(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   send_reply(sptr, RPL_LUSERME, UserStats.local_clients,
 	     UserStats.local_servers);
 
-  send_reply(sptr, RPL_CURRENT_LOCAL, UserStats.local_clients, UserStats.localclients);
-  send_reply(sptr, RPL_CURRENT_GLOBAL, UserStats.clients, UserStats.globalclients);
+  sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Highest connection count: "
+		"%d (%d clients)", sptr, max_connection_count,
+		max_client_count);
 
-  sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Maximum de connexion reçues: "
-		"%d (%d clients) (%d connexions reçues au total depuis le %s)", sptr, max_connection_count,
-		max_client_count, UserStats.conncount, date(cli_firsttime(&me)));
   return 0;
 }

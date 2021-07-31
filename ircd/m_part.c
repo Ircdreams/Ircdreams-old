@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_part.c,v 1.4 2005/01/31 06:58:27 bugs Exp $
+ * $Id: m_part.c,v 1.1.1.1 2005/10/01 17:28:05 progs Exp $
  */
 
 /*
@@ -79,20 +79,20 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "channel.h"
 #include "client.h"
 #include "hash.h"
 #include "ircd.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "numeric.h"
 #include "numnicks.h"
 #include "send.h"
-#include "s_debug.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <string.h>
 
 /*
@@ -107,7 +107,7 @@ int m_part(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   struct Channel *chptr;
   struct Membership *member;
   struct JoinBuf parts;
-  unsigned int flags;
+  unsigned int flags = 0;
   char *p = 0;
   char *name;
 
@@ -140,10 +140,12 @@ int m_part(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 
     assert(!IsZombie(member)); /* Local users should never zombie */
 
-    flags=0;
-
-    if (!member_can_send_to_channel(member,0))
+    if (!member_can_send_to_channel(member, 0))
+    {
       flags |= CHFL_BANNED;
+      /* Remote clients don't want to see a comment either. */
+      parts.jb_comment = 0;
+    }
 
     if (IsDelayedJoin(member))
       flags |= CHFL_DELAYED;
@@ -189,22 +191,15 @@ int ms_part(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 
     chptr = get_channel(sptr, name, CGT_NO_CREATE); /* look up channel */
 
-    if (!chptr || !(member = find_member_link(chptr, sptr)))
+    if (!chptr || IsLocalChannel(name) ||
+	!(member = find_member_link(chptr, sptr)))
       continue; /* ignore from remote clients */
 
     if (IsZombie(member)) /* figure out special flags... */
       flags |= CHFL_ZOMBIE;
 
-    if (IsDelayedJoin(member)) 
+    if (IsDelayedJoin(member))
       flags |= CHFL_DELAYED;
-
-    /*
-     * XXX BUG: If a client /part's with a part notice, on channels where
-     * he's banned, local clients will not see the part notice, but remote
-     * clients will.
-     */
-    if (!member_can_send_to_channel(member,0))
-      flags |= CHFL_BANNED;
 
     /* part user from channel */
     joinbuf_join(&parts, chptr, flags);

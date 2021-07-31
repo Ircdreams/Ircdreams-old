@@ -1,7 +1,6 @@
-/*
- * crule.h
- *
- * $Id: crule.h,v 1.1.1.1 2004/02/28 11:10:38 bugs Exp $
+/** @file crule.h
+ * @brief Interfaces and declarations for connection rule checking.
+ * @version $Id: crule.h,v 1.1.1.1 2005/10/01 17:26:50 progs Exp $
  */
 #ifndef INCLUDED_crule_h
 #define INCLUDED_crule_h

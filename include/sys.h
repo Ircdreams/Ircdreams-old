@@ -16,7 +16,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: sys.h,v 1.2 2005/01/03 03:53:13 bugs Exp $
+ * $Id: sys.h,v 1.1.1.1 2005/10/01 17:27:02 progs Exp $
  */
 #ifndef INCLUDED_sys_h
 #define INCLUDED_sys_h
@@ -27,13 +27,6 @@
  * and space reserved for logfiles, DNS sockets and identd sockets etc.
  */
 #define MAXCLIENTS      (MAXCONNECTIONS-24)
-
-/* Define FD_SETSIZE to what we want before including sys/types.h on BSD */
-#if  defined(__FreeBSD__) || defined(__NetBSD__) || defined(__bsdi__)
-#if ((!defined(USE_POLL)) && (!defined(FD_SETSIZE)))
-#define FD_SETSIZE ((MAXCONNECTIONS)+4)
-#endif
-#endif
 
 #define IRCD_MAX(a, b)  ((a) > (b) ? (a) : (b))
 #define IRCD_MIN(a, b)  ((a) < (b) ? (a) : (b))

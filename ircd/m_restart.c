@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_restart.c,v 1.2 2005/01/24 01:19:23 bugs Exp $
+ * $Id: m_restart.c,v 1.2 2005/10/30 10:15:22 progs Exp $
  */
 
 /*
@@ -79,7 +79,7 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "ircd.h"
@@ -90,18 +90,22 @@
 #include "numnicks.h"
 #include "send.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 
 /*
  * mo_restart - oper message handler
  */
 int mo_restart(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 {
-  if (!CanDie(sptr) || !HasPriv(sptr, PRIV_RESTART) || !WantRestart(sptr))
+  const char *msg;
+
+  if (!HasPriv(sptr, PRIV_RESTART))
     return send_reply(sptr, ERR_NOPRIVILEGES);
 
-  log_write(LS_SYSTEM, L_NOTICE, 0, "Server RESTART by %#C", sptr);
-  server_restart("received RESTART");
+  msg = (parc > 1 && *parv[parc - 1] != '\0') ? parv[parc - 1] : "received RESTART";
+
+  log_write(LS_SYSTEM, L_NOTICE, 0, "Server RESTART by %#C: %s", sptr, msg);
+  server_restart(msg);
 
   return 0;
 }

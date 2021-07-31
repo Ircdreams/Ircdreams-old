@@ -20,14 +20,15 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_proto.c,v 1.2 2005/01/24 01:19:23 bugs Exp $
+ * $Id: m_proto.c,v 1.2 2005/10/23 23:31:01 progs Exp $
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "ircd.h"
 #include "ircd_alloc.h"
 #include "ircd_chattr.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "msg.h"
@@ -36,10 +37,9 @@
 #include "s_debug.h"
 #include "s_misc.h"
 #include "send.h"
-#include "supported.h"
 #include "version.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

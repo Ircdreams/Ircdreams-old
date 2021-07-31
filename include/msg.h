@@ -16,8 +16,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: msg.h,v 1.16 2006/01/24 16:47:51 bugs Exp $
+ */
+/** @file
+ * @brief Command and token declarations and structures.
+ * @version $Id: msg.h,v 1.4 2005/10/09 18:45:22 progs Exp $
  */
 #ifndef INCLUDED_msg_h
 #define INCLUDED_msg_h
@@ -146,10 +148,6 @@ struct Client;
 #define TOK_OPER                "OPER"
 #define CMD_OPER		MSG_OPER, TOK_OPER
 
-#define MSG_OPERMOTD            "OPERMOTD"
-#define TOK_OPERMOTD            "OL"
-#define CMD_OPERMOTD            MSG_OPERMOTD, TOK_OPERMOTD
-
 #define MSG_PASS                "PASS"          /* PASS */
 #define TOK_PASS                "PA"
 #define CMD_PASS		MSG_PASS, TOK_PASS
@@ -204,7 +202,7 @@ struct Client;
 
 #define MSG_WALLVOICES           "WALLVOICES"     /* WV */
 #define TOK_WALLVOICES           "WV"
-#define CMD_WALLVOICES           MSG_WALLVOICES, TOK_WALLVOICES
+#define CMD_WALLVOICES		MSG_WALLVOICES, TOK_WALLVOICES
 
 #define MSG_CPRIVMSG            "CPRIVMSG"      /* CPRI */
 #define TOK_CPRIVMSG            "CP"
@@ -294,10 +292,6 @@ struct Client;
 #define TOK_GLINE               "GL"
 #define CMD_GLINE		MSG_GLINE, TOK_GLINE
 
-#define MSG_SHUN                "SHUN"         /* SHUN */ 
-#define TOK_SHUN                "SU" 
-#define CMD_SHUN                MSG_SHUN, TOK_SHUN 
-
 #define MSG_BURST               "BURST"         /* BURS */
 #define TOK_BURST               "B"
 #define CMD_BURST		MSG_BURST, TOK_BURST
@@ -342,12 +336,12 @@ struct Client;
 #define TOK_ACCOUNT		"AC"
 #define CMD_ACCOUNT		MSG_ACCOUNT, TOK_ACCOUNT
 
-#define MSG_ASLL		"ASLL"		/* ASLL */
-#define TOK_ASLL		"LL"
-#define CMD_ASLL		MSG_ASLL, TOK_ASLL
+#define MSG_ASLL               "ASLL"          /* ASLL */
+#define TOK_ASLL               "LL"
+#define CMD_ASLL               MSG_ASLL, TOK_ASLL
 
-#define MSG_POST		"POST"          /* POST */
-#define TOK_POST		"POST"
+#define MSG_POST                "POST"          /* POST */
+#define TOK_POST                "POST"
 
 #define MSG_SET			"SET"		/* SET */
 #define TOK_SET			"SET"
@@ -359,85 +353,60 @@ struct Client;
 #define TOK_GET			"GET"
 
 #define MSG_PRIVS		"PRIVS"		/* PRIV */
-#define TOK_PRIVS		"PRIVS"
+#define TOK_PRIVS		"PR"
+#define CMD_PRIVS               MSG_PRIVS, TOK_PRIVS
+
+#define MSG_CAP			"CAP"
+#define TOK_CAP			"CAP"
+#define CMD_CAP			MSG_CAP, TOK_CAP
 
 #define MSG_SVSNICK		"SVSNICK"	/* SVSNICK */
-#define TOK_SVSNICK		"SVSNICK"
+#define TOK_SVSNICK		"SN"
 #define CMD_SVSNICK		MSG_SVSNICK, TOK_SVSNICK
 
-#define MSG_SANICK             "SANICK"       /* SANICK */
-#define TOK_SANICK             "SANICK"
-#define CMD_SANICK             MSG_SANICK, TOK_SANICK
-
 #define MSG_SVSMODE		"SVSMODE"	/* SVSMODE */
-#define TOK_SVSMODE		"SVSMODE"
-
-#define MSG_SAMODE             "SAMODE"       /* SAMODE */
-#define TOK_SAMODE             "SAMODE"
+#define TOK_SVSMODE		"SM"
+#define CMD_SVSMODE		MSG_SVSMODE, TOK_SVSMODE
 
 #define MSG_SNO			"SNO"		/* SNO */
 #define TOK_SNO			"SNO"
+#define CMD_SNO			MSG_SNO, TOK_SNO
 
-#define MSG_SVSJOIN		"SVSJOIN"
-#define TOK_SVSJOIN		"SJ"
-#define CMD_SVSJOIN		MSG_SVSJOIN, TOK_SVSJOIN
+#define MSG_CHECK		"CHECK"		/* CHECK */
+#define TOK_CHECK		"CHECK"
+#define CMD_CHECK		MSG_CHECK, TOK_CHECK
 
-#define MSG_SAJOIN             "SAJOIN"
-#define TOK_SAJOIN             "SAJOIN"
-#define CMD_SAJOIN             MSG_SAJOIN, TOK_SAJOIN
-
-#define MSG_SVSPART		"SVSPART"
-#define TOK_SVSPART		"SP"
-#define CMD_SVSPART             MSG_SVSPART, TOK_SVSPART
-
-#define MSG_SAPART             "SAPART"
-#define TOK_SAPART             "SAPART"
-#define CMD_SAPART             MSG_SAPART, TOK_SAPART
-
-#define MSG_SVSHOST		"SVSHOST"
-#define TOK_SVSHOST		"SA"
-#define CMD_SVSHOST		MSG_SVSHOST, TOK_SVSHOST
-
-#define MSG_SAHOST             "SAHOST"
-#define TOK_SAHOST             "SAHOST"
-#define CMD_SAHOST             MSG_SAHOST, TOK_SAHOST
-
-#define MSG_MKPASSWD		"MKPASSWD"
-#define TOK_MKPASSWD		"MKPASSWD"
-#define CMD_MKPASSWD		MSG_MKPASSWD, TOK_MKPASSWD
-
-#define MSG_RULES	        "RULES"         /* RULE */
-#define TOK_RULES        	"RL"
-#define CMD_RULES         	MSG_RULES, TOK_RULES
-
-#define MSG_SWHOIS              "SWHOIS"        /* SWHOIS */
-#define TOK_SWHOIS              "SW"
-#define CMD_SWHOIS              MSG_SWHOIS, TOK_SWHOIS
+#define MSG_SETHOST		"SETHOST"	/* SETHOST */
+#define TOK_SETHOST		"SETHOST"
+#define CMD_SETHOST		MSG_SETHOST, TOK_SETHOST
 
 /*
  * Constants
  */
-#define   MFLG_SLOW              0x01   /* Command can be executed roughly    *
-                                         * once per 2 seconds.                */
-#define   MFLG_UNREG             0x02   /* Command available to unregistered  *
-                                         * clients.                           */
-#define   MFLG_IGNORE            0x04   /* silently ignore command from
-                                         * unregistered clients */
-#define   MFLG_EXTRA             0x08
+#define   MFLG_SLOW              0x01   /** Limit command usage to
+                                         * once per 2 seconds (for
+                                         * local users). */
+#define   MFLG_UNREG             0x02   /** Command available to
+                                         * unregistered clients. */
+#define   MFLG_IGNORE            0x04   /** Silently ignore command from
+                                         * unregistered clients. */
+#define   MFLG_EXTRA             0x08   /** Handler requests that
+                                         * mptr->extra be passed in
+                                         * parv[1]. */
 
 /*
  * Structures
  */
+
+/** Information on how to parse a message. */
 struct Message {
-  char *cmd;                  /* command string */
-  char *tok;                  /* token (shorter command string) */
-  unsigned int count;         /* number of times message used */
-  unsigned int parameters;
-  unsigned int flags;           /* bit 0 set means that this command is allowed
-                                   to be used only on the average of once per 2
-                                   seconds -SRB */
-  unsigned int bytes;         /* bytes received for this message */
-  void *extra;
+  char *cmd;                  /**< command string */
+  char *tok;                  /**< token (shorter command string) */
+  unsigned int count;         /**< number of times message used */
+  unsigned int parameters;    /**< minimum number of parameters */
+  unsigned int flags;         /**< MFLG_* flags for command */
+  unsigned int bytes;         /**< bytes received for this message */
+  void *extra;                /**< extra pointer to be passed in parv[1] */
   /*
    * cptr = Connected client ptr
    * sptr = Source client ptr

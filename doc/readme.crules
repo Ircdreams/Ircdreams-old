@@ -28,7 +28,7 @@ Unary operators
 ---------------
 !    eg: !argument        - true if the argument is false
 
-Binary operators
+Binary operartors
 -----------------
 &&   eg: arg1&&arg2       - true if arg1 and arg2 are both true
 ||   eg: arg1||arg2       - true if arg1, arg2, or both are true

@@ -1,10 +1,12 @@
-/*
- * s_debug.h
- *
- * $Id: s_debug.h,v 1.1.1.1 2004/02/28 11:11:10 bugs Exp $
+/* @file s_debug.h
+ * @brief Debug APIs for the ircd.
+ * @version $Id: s_debug.h,v 1.1.1.1 2005/10/01 17:27:01 progs Exp $
  */
 #ifndef INCLUDED_s_debug_h
 #define INCLUDED_s_debug_h
+#ifndef INCLUDED_config_h
+#include "config.h"          /* Needed for DEBUGMODE */
+#endif
 #ifndef INCLUDED_ircd_defs_h
 #include "ircd_defs.h"       /* Needed for HOSTLEN */
 #endif
@@ -22,23 +24,25 @@ struct StatDesc;
  * Macro's
  */
 
+/** If DEBUGMODE is defined, output the debug message.
+ * @param x A two-or-more element list containing level, format and arguments.
+ */
 #define Debug(x) debug x
-#define LOGFILE LPATH
+#define LOGFILE LPATH /**< Path to debug log file. */
 
 /*
  * defined debugging levels
  */
-#define DEBUG_FATAL   0
-#define DEBUG_ERROR   1  /* report_error() and other errors that are found */
-#define DEBUG_NOTICE  3
-#define DEBUG_DNS     4  /* used by all DNS related routines - a *lot* */
-#define DEBUG_INFO    5  /* general useful info */
-#define DEBUG_NUM     6  /* numerics */
-#define DEBUG_SEND    7  /* everything that is sent out */
-#define DEBUG_DEBUG   8  /* everything that is received */ 
-#define DEBUG_MALLOC  9  /* malloc/free calls */
-#define DEBUG_LIST   10  /* debug list use */
-#define DEBUG_ENGINE 11  /* debug event engine; can dump gigabyte logs */
+#define DEBUG_FATAL   0  /**< fatal error */
+#define DEBUG_ERROR   1  /**< report_error() and other errors that are found */
+#define DEBUG_NOTICE  3  /**< somewhat useful, but non-critical, messages */
+#define DEBUG_DNS     4  /**< used by all DNS related routines - a *lot* */
+#define DEBUG_INFO    5  /**< general useful info */
+#define DEBUG_SEND    7  /**< everything that is sent out */
+#define DEBUG_DEBUG   8  /**< everything that is received */ 
+#define DEBUG_MALLOC  9  /**< malloc/free calls */
+#define DEBUG_LIST   10  /**< debug list use */
+#define DEBUG_ENGINE 11  /**< debug event engine; can dump gigabyte logs */
 
 /*
  * proto types
@@ -46,8 +50,8 @@ struct StatDesc;
 
 extern void vdebug(int level, const char *form, va_list vl);
 extern void debug(int level, const char *form, ...);
-extern void send_usage(struct Client *cptr, struct StatDesc *sd, int stat,
-		       char *param);
+extern void send_usage(struct Client *cptr, const struct StatDesc *sd,
+                       char *param);
 
 #else /* !DEBUGMODE */
 
@@ -58,7 +62,7 @@ extern void send_usage(struct Client *cptr, struct StatDesc *sd, int stat,
 
 extern const char* debug_serveropts(void);
 extern void debug_init(int use_tty);
-extern void count_memory(struct Client *cptr, struct StatDesc *sd, int stat,
-			 char *param);
+extern void count_memory(struct Client *cptr, const struct StatDesc *sd,
+                         char *param);
 
 #endif /* INCLUDED_s_debug_h */

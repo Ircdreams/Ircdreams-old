@@ -15,68 +15,34 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: ircd_string.c,v 1.3 2005/09/26 14:31:24 bugs Exp $
  */
-#include "../config.h"
+/** @file
+ * @brief Implementation of string operations.
+ * @version $Id: ircd_string.c,v 1.1.1.1 2005/10/01 17:27:45 progs Exp $
+ */
+#include "config.h"
 
 #include "ircd_string.h"
 #include "ircd_defs.h"
 #include "ircd_chattr.h"
 #include "ircd_log.h"
-#include <assert.h>
+#include "res.h"
+
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <string.h>
-#include <regex.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+
 /*
  * include the character attribute tables here
  */
 #include "chattr.tab.c"
 
-
-/*
- * Disallow a hostname label to contain anything but a [-a-zA-Z0-9].
- * It may not start or end on a '.'.
- * A label may not end on a '-', the maximum length of a label is
- * 63 characters.
- * On top of that (which seems to be the RFC) we demand that the
- * top domain does not contain any digits.
+/** Check whether \a str contains wildcard characters.
+ * @param[in] str String that might contain wildcards.
+ * @return Non-zero if \a str contains naked (non-escaped) wildcards,
+ * zero if there are none or if they are all escaped.
  */
-static const char* hostExpr = "^([-0-9A-Za-z]*[0-9A-Za-z]\\.)+[A-Za-z]+$";
-static regex_t hostRegex;
-
-static const char* addrExpr =
-    "^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){1,3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$";
-static regex_t addrRegex;
-
-int init_string(void)
-{
-  /*
-   * initialize matching expressions
-   * XXX - expressions MUST be correct, don't change expressions
-   * without testing them. Might be a good idea to exit if these fail,
-   * important code depends on them.
-   * TODO: use regerror for an error message
-   */
-  if (regcomp(&hostRegex, hostExpr, REG_EXTENDED | REG_NOSUB))
-    return 0;
-
-  if (regcomp(&addrRegex, addrExpr, REG_EXTENDED | REG_NOSUB))
-    return 0;
-  return 1;
-}
-
-int string_is_hostname(const char* str)
-{
-  assert(0 != str);
-  return (strlen(str) <= HOSTLEN && 0 == regexec(&hostRegex, str, 0, 0, 0));
-}
-
-int string_is_address(const char* str)
-{
-  assert(0 != str);
-  return (0 == regexec(&addrRegex, str, 0, 0, 0));
-}
-
 int string_has_wildcards(const char* str)
 {
   assert(0 != str);
@@ -91,11 +57,15 @@ int string_has_wildcards(const char* str)
   return 0;
 }
 
-/*
- * strtoken.c
- *
- * Walk through a string of tokens, using a set of separators.
- * -argv 9/90
+/** Split a string on certain delimiters.
+ * This is a reentrant version of normal strtok().  The first call for
+ * a particular input string must use a non-NULL \a str; *save will be
+ * initialized based on that.  Later calls must use a NULL \a str;
+ * *save will be updated.
+ * @param[in,out] save Pointer to a position indicator.
+ * @param[in] str Pointer to the input string, or NULL to continue.
+ * @param[in] fs String that lists token delimiters.
+ * @return Next token in input string, or NULL if no tokens remain.
  */
 char* ircd_strtok(char **save, char *str, char *fs)
 {
@@ -125,11 +95,9 @@ char* ircd_strtok(char **save, char *str, char *fs)
   return (tmp);
 }
 
-/*
- * canonize
- *
- * reduce a string of duplicate list entries to contain only the unique
- * items.  Unavoidably O(n^2).
+/** Rewrite a comma-delimited list of items to remove duplicates.
+ * @param[in,out] buffer Comma-delimited list.
+ * @return The input buffer \a buffer.
  */
 char* canonize(char* buffer)
 {
@@ -172,12 +140,11 @@ char* canonize(char* buffer)
   return cbuf;
 }
 
-/*
- * ircd_strncpy - optimized strncpy
- * This may not look like it would be the fastest possible way to do it,
- * but it generally outperforms everything else on many platforms,
- * including asm library versions and memcpy, if compiled with the
- * optimizer on. (-O2 for gcc) --Bleep
+/** Copy one string to another, not to exceed a certain length.
+ * @param[in] s1 Output buffer.
+ * @param[in] s2 Source buffer.
+ * @param[in] n Maximum number of bytes to write, plus one.
+ * @return The original input buffer \a s1.
  */
 char* ircd_strncpy(char* s1, const char* s2, size_t n)
 {
@@ -202,19 +169,10 @@ NTL_HDR_strCasediff { NTL_SRC_strCasediff }
  * Other functions visible externally
  */
 
-int strnChattr(const char *s, size_t n)
-{
-  const char *rs = s;
-  unsigned int x = ~0;
-  int r = n;
-  while (*rs && r--)
-    x &= IRCD_CharAttrTab[*rs++ - CHAR_MIN];
-  return x;
-}
-
-/*
- * ircd_strcmp - case insensitive comparison of 2 strings
- * NOTE: see ircd_chattr.h for notes on case mapping.
+/** Case insensitive string comparison.
+ * @param[in] a First string to compare.
+ * @param[in] b Second string to compare.
+ * @return Less than, equal to, or greater than zero if \a a is lexicographically less than, equal to, or greater than \a b.
  */
 int ircd_strcmp(const char *a, const char *b)
 {
@@ -229,9 +187,12 @@ int ircd_strcmp(const char *a, const char *b)
   return (ToLower(*ra) - ToLower(*rb));
 }
 
-/*
- * ircd_strncmp - counted case insensitive comparison of 2 strings
- * NOTE: see ircd_chattr.h for notes on case mapping.
+/** Case insensitive comparison of the starts of two strings.
+ * @param[in] a First string to compare.
+ * @param[in] b Second string to compare.
+ * @param[in] n Maximum number of characters to compare.
+ * @return Less than, equal to, or greater than zero if \a a is
+ * lexicographically less than, equal to, or greater than \a b.
  */
 int ircd_strncmp(const char *a, const char *b, size_t n)
 {
@@ -249,33 +210,30 @@ int ircd_strncmp(const char *a, const char *b, size_t n)
   return (ToLower(*ra) - ToLower(*rb));
 }
 
-/*
- * unique_name_vector - create a unique vector of names from
- * a token separated list
- * list   - [in]  a token delimited null terminated character array
- * token  - [in]  the token to replace 
- * vector - [out] vector of strings to be returned
- * size   - [in]  maximum number of elements to place in vector
- * Returns count of elements placed into the vector, if the list
- * is an empty string { '\0' } 0 is returned.
- * list, and vector must be non-null and size must be > 0 
- * Empty strings <token><token> are not placed in the vector or counted.
- * This function ignores all subsequent tokens when count == size
- *
- * NOTE: this function destroys it's input, do not use list after it
- * is passed to this function
+/** Fill a vector of distinct names from a delimited input list.
+ * Empty tokens (when \a token occurs at the start or end of \a list,
+ * or when \a token occurs adjacent to itself) are ignored.  When
+ * \a size tokens have been written to \a vector, the rest of the
+ * string is ignored.
+ * Unlike token_vector(), if a token repeats an earlier token, it is
+ * skipped.
+ * @param[in,out] names Input buffer.
+ * @param[in] token Delimiter used to split \a list.
+ * @param[out] vector Output vector.
+ * @param[in] size Maximum number of elements to put in \a vector.
+ * @return Number of elements written to \a vector.
  */
-int unique_name_vector(char* list, char token, char** vector, int size)
+int unique_name_vector(char* names, char token, char** vector, int size)
 {
   int   i;
   int   count = 0;
-  char* start = list;
+  char* start = names;
   char* end;
 
-  assert(0 != list);
+  assert(0 != names);
   assert(0 != vector);
   assert(0 < size);
- 
+
   /*
    * ignore spurious tokens
    */
@@ -309,31 +267,27 @@ int unique_name_vector(char* list, char token, char** vector, int size)
   return count;
 }
 
-/*
- * token_vector - create a vector of tokens from
- * a token separated list
- * list   - [in]  a token delimited null terminated character array
- * token  - [in]  the token to replace 
- * vector - [out] vector of strings to be returned
- * size   - [in]  maximum number of elements to place in vector
- * returns count of elements placed into the vector, if the list
- * is an empty string { '\0' } 0 is returned.
- * list, and vector must be non-null and size must be > 1 
- * Empty tokens are counted and placed in the list
- *
- * NOTE: this function destroys it's input, do not use list after it
- * is passed to this function
+/** Fill a vector of tokens from a delimited input list.
+ * Empty tokens (when \a token occurs at the start or end of \a list,
+ * or when \a token occurs adjacent to itself) are ignored.  When
+ * \a size tokens have been written to \a vector, the rest of the
+ * string is ignored.
+ * @param[in,out] names Input buffer.
+ * @param[in] token Delimiter used to split \a list.
+ * @param[out] vector Output vector.
+ * @param[in] size Maximum number of elements to put in \a vector.
+ * @return Number of elements written to \a vector.
  */
-int token_vector(char* list, char token, char** vector, int size)
+int token_vector(char* names, char token, char** vector, int size)
 {
   int   count = 0;
-  char* start = list;
+  char* start = names;
   char* end;
 
-  assert(0 != list);
+  assert(0 != names);
   assert(0 != vector);
   assert(1 < size);
- 
+
   vector[count++] = start;
   for (end = strchr(start, token); end; end = strchr(start, token)) {
     *end++ = '\0';
@@ -346,32 +300,37 @@ int token_vector(char* list, char token, char** vector, int size)
     break;
   }
   return count;
-} 
+}
 
-/*
- * host_from_uh - get the host.domain part of a user@host.domain string
- * ripped from get_sockhost
+/** Copy all or part of the hostname in a string to another string.
+ * If \a userhost contains an '\@', the remaining portion is used;
+ * otherwise, the whole \a userhost is used.
+ * @param[out] buf Output buffer.
+ * @param[in] userhost user\@hostname or hostname string.
+ * @param[in] len Maximum number of bytes to write to \a host.
+ * @return The output buffer \a buf.
  */
-char* host_from_uh(char* host, const char* userhost, size_t n)
+char* host_from_uh(char* buf, const char* userhost, size_t len)
 {
   const char* s;
 
-  assert(0 != host);
+  assert(0 != buf);
   assert(0 != userhost);
 
   if ((s = strchr(userhost, '@')))
     ++s;
   else
     s = userhost;
-  ircd_strncpy(host, s, n);
-  host[n] = '\0';
-  return host;
+  ircd_strncpy(buf, s, len);
+  buf[len] = '\0';
+  return buf;
 }
 
-/* 
+/*
  * this new faster inet_ntoa was ripped from:
  * From: Thomas Helvey <tomh@inxpress.net>
  */
+/** Array of text strings for dotted quads. */
 static const char* IpQuadTab[] =
 {
     "0",   "1",   "2",   "3",   "4",   "5",   "6",   "7",   "8",   "9",
@@ -402,51 +361,291 @@ static const char* IpQuadTab[] =
   "250", "251", "252", "253", "254", "255"
 };
 
-/*
- * ircd_ntoa - rewrote and renamed yet again :) --Bleep
- * inetntoa - in_addr to string
- *      changed name to remove collision possibility and
- *      so behaviour is guaranteed to take a pointer arg.
- *      -avalon 23/11/92
- *  inet_ntoa --  returned the dotted notation of a given
- *      internet number
- *      argv 11/90).
- *  inet_ntoa --  its broken on some Ultrix/Dynix too. -avalon
+/** Convert an IP address to printable ASCII form.
+ * This is generally deprecated in favor of ircd_ntoa_r().
+ * @param[in] in Address to convert.
+ * @return Pointer to a static buffer containing the readable form.
  */
-const char* ircd_ntoa(const char* in)
+const char* ircd_ntoa(const struct irc_in_addr* in)
 {
-  static char buf[20];
+  static char buf[SOCKIPLEN];
   return ircd_ntoa_r(buf, in);
 }
 
-/*
- * reentrant version of above
+/** Convert an IP address to printable ASCII form.
+ * @param[out] buf Output buffer to write to.
+ * @param[in] in Address to format.
+ * @return Pointer to the output buffer \a buf.
  */
-const char* ircd_ntoa_r(char* buf, const char* in)
+const char* ircd_ntoa_r(char* buf, const struct irc_in_addr* in)
 {
-  char*                p = buf;
-  const unsigned char* a = (const unsigned char*)in;
-  const char*          n;
+    assert(buf != NULL);
+    assert(in != NULL);
 
-  assert(0 != buf);
-  assert(0 != in);
+    if (irc_in_addr_is_ipv4(in)) {
+      unsigned int pos, len;
+      unsigned char *pch;
 
-  n = IpQuadTab[*a++];
-  while ((*p = *n++))
-    ++p;
-  *p++ = '.';
-  n = IpQuadTab[*a++];
-  while ((*p = *n++))
-    ++p;
-  *p++ = '.';
-  n = IpQuadTab[*a++];
-  while ((*p = *n++))
-    ++p;
-  *p++ = '.';
-  n = IpQuadTab[*a];
-  while ((*p = *n++))
-    ++p;
-  return buf;
+      pch = (unsigned char*)&in->in6_16[6];
+      len = strlen(IpQuadTab[*pch]);
+      memcpy(buf, IpQuadTab[*pch++], len);
+      pos = len;
+      buf[pos++] = '.';
+      len = strlen(IpQuadTab[*pch]);
+      memcpy(buf+pos, IpQuadTab[*pch++], len);
+      pos += len;
+      buf[pos++] = '.';
+      len = strlen(IpQuadTab[*pch]);
+      memcpy(buf+pos, IpQuadTab[*pch++], len);
+      pos += len;
+      buf[pos++] = '.';
+      len = strlen(IpQuadTab[*pch]);
+      memcpy(buf+pos, IpQuadTab[*pch++], len);
+      buf[pos + len] = '\0';
+      return buf;
+    } else {
+      static const char hexdigits[] = "0123456789abcdef";
+      unsigned int pos, part, max_start, max_zeros, curr_zeros, ii;
+
+      /* Find longest run of zeros. */
+      for (max_start = ii = 1, max_zeros = curr_zeros = 0; ii < 8; ++ii) {
+        if (!in->in6_16[ii])
+          curr_zeros++;
+        else if (curr_zeros > max_zeros) {
+          max_start = ii - curr_zeros;
+          max_zeros = curr_zeros;
+          curr_zeros = 0;
+        }
+      }
+      if (curr_zeros > max_zeros) {
+        max_start = ii - curr_zeros;
+        max_zeros = curr_zeros;
+      }
+
+      /* Print out address. */
+/** Append \a CH to the output buffer. */
+#define APPEND(CH) do { buf[pos++] = (CH); } while (0)
+      for (pos = ii = 0; (ii < 8); ++ii) {
+        if ((max_zeros > 0) && (ii == max_start)) {
+          APPEND(':');
+          ii += max_zeros - 1;
+          continue;
+        }
+        part = ntohs(in->in6_16[ii]);
+        if (part >= 0x1000)
+          APPEND(hexdigits[part >> 12]);
+        if (part >= 0x100)
+          APPEND(hexdigits[(part >> 8) & 15]);
+        if (part >= 0x10)
+          APPEND(hexdigits[(part >> 4) & 15]);
+        APPEND(hexdigits[part & 15]);
+        if (ii < 7)
+          APPEND(':');
+      }
+#undef APPEND
+
+      /* Nul terminate and return number of characters used. */
+      buf[pos++] = '\0';
+      return buf;
+    }
 }
 
+/** Attempt to parse an IPv4 address into a network-endian form.
+ * @param[in] input Input string.
+ * @param[out] output Network-endian representation of the address.
+ * @param[out] pbits Number of bits found in pbits.
+ * @return Number of characters used from \a input, or 0 if the parse failed.
+ */
+static unsigned int
+ircd_aton_ip4(const char *input, unsigned int *output, unsigned char *pbits)
+{
+  unsigned int dots = 0, pos = 0, part = 0, ip = 0, bits;
 
+  /* Intentionally no support for bizarre IPv4 formats (plain
+   * integers, octal or hex components) -- only vanilla dotted
+   * decimal quads.
+   */
+  if (input[0] == '.')
+    return 0;
+  bits = 32;
+  while (1) switch (input[pos]) {
+  case '\0':
+    if (dots < 3)
+      return 0;
+  out:
+    ip |= part << (24 - 8 * dots);
+    *output = htonl(ip);
+    if (pbits)
+      *pbits = bits;
+    return pos;
+  case '.':
+    if (input[++pos] == '.')
+      return 0;
+    ip |= part << (24 - 8 * dots++);
+    part = 0;
+    if (input[pos] == '*') {
+      while (input[++pos] == '*') ;
+      if (input[pos] != '\0')
+        return 0;
+      if (pbits)
+        *pbits = dots * 8;
+      *output = htonl(ip);
+      return pos;
+    }
+    break;
+  case '/':
+    if (!pbits || !IsDigit(input[pos + 1]))
+      return 0;
+    for (bits = 0; IsDigit(input[++pos]); )
+      bits = bits * 10 + input[pos] - '0';
+    if (bits > 32)
+      return 0;
+    goto out;
+  case '0': case '1': case '2': case '3': case '4':
+  case '5': case '6': case '7': case '8': case '9':
+    part = part * 10 + input[pos++] - '0';
+    if (part > 255)
+      return 0;
+    break;
+  default:
+    return 0;
+  }
+}
+
+/** Parse a numeric IPv4 or IPv6 address into an irc_in_addr.
+ * @param[in] input Input buffer.
+ * @param[out] ip Receives parsed IP address.
+ * @param[out] pbits If non-NULL, receives number of bits specified in address mask.
+ * @return Number of characters used from \a input, or 0 if the
+ * address was unparseable or malformed.
+ */
+int
+ipmask_parse(const char *input, struct irc_in_addr *ip, unsigned char *pbits)
+{
+  char *colon;
+  char *dot;
+
+  assert(ip);
+  assert(input);
+  memset(ip, 0, sizeof(*ip));
+  colon = strchr(input, ':');
+  dot = strchr(input, '.');
+
+  if (colon && (!dot || (dot > colon))) {
+    unsigned int part = 0, pos = 0, ii = 0, colon = 8;
+    const char *part_start = NULL;
+
+    /* Parse IPv6, possibly like ::127.0.0.1.
+     * This is pretty straightforward; the only trick is borrowed
+     * from Paul Vixie (BIND): when it sees a "::" continue as if
+     * it were a single ":", but note where it happened, and fill
+     * with zeros afterward.
+     */
+    if (input[pos] == ':') {
+      if ((input[pos+1] != ':') || (input[pos+2] == ':'))
+        return 0;
+      colon = 0;
+      pos += 2;
+      part_start = input + pos;
+    }
+    while (ii < 8) switch (input[pos]) {
+      unsigned char chval;
+    case '0': case '1': case '2': case '3': case '4':
+    case '5': case '6': case '7': case '8': case '9':
+      chval = input[pos] - '0';
+    use_chval:
+      part = (part << 4) | chval;
+      if (part > 0xffff)
+        return 0;
+      pos++;
+      break;
+    case 'A': case 'B': case 'C': case 'D': case 'E': case 'F':
+      chval = input[pos] - 'A' + 10;
+      goto use_chval;
+    case 'a': case 'b': case 'c': case 'd': case 'e': case 'f':
+      chval = input[pos] - 'a' + 10;
+      goto use_chval;
+    case ':':
+      part_start = input + ++pos;
+      if (input[pos] == '.')
+        return 0;
+      ip->in6_16[ii++] = htons(part);
+      part = 0;
+      if (input[pos] == ':') {
+        if (colon < 8)
+          return 0;
+        colon = ii;
+        pos++;
+      }
+      break;
+    case '.': {
+      uint32_t ip4;
+      unsigned int len;
+      len = ircd_aton_ip4(part_start, &ip4, pbits);
+      if (!len || (ii > 6))
+        return 0;
+      ip->in6_16[ii++] = htons(ntohl(ip4) >> 16);
+      ip->in6_16[ii++] = htons(ntohl(ip4) & 65535);
+      if (pbits)
+        *pbits += 96;
+      pos = part_start + len - input;
+      goto finish;
+    }
+    case '/':
+      if (!pbits || !IsDigit(input[pos + 1]))
+        return 0;
+      ip->in6_16[ii++] = htons(part);
+      for (part = 0; IsDigit(input[++pos]); )
+        part = part * 10 + input[pos] - '0';
+      if (part > 128)
+        return 0;
+      *pbits = part;
+      goto finish;
+    case '*':
+      while (input[++pos] == '*') ;
+      if (input[pos] != '\0' || colon < 8)
+        return 0;
+      if (pbits)
+        *pbits = ii * 16;
+      return pos;
+    case '\0':
+      ip->in6_16[ii++] = htons(part);
+      if (colon == 8 && ii < 8)
+        return 0;
+      if (pbits)
+        *pbits = 128;
+      goto finish;
+    default:
+      return 0;
+    }
+  finish:
+    if (colon < 8) {
+      unsigned int jj;
+      /* Shift stuff after "::" up and fill middle with zeros. */
+      for (jj = 0; jj < ii - colon; jj++)
+        ip->in6_16[7 - jj] = ip->in6_16[ii - jj - 1];
+      for (jj = 0; jj < 8 - ii; jj++)
+        ip->in6_16[colon + jj] = 0;
+    }
+    return pos;
+  } else if (dot || strchr(input, '/')) {
+    unsigned int addr;
+    int len = ircd_aton_ip4(input, &addr, pbits);
+    if (len) {
+      ip->in6_16[5] = htons(65535);
+      ip->in6_16[6] = htons(ntohl(addr) >> 16);
+      ip->in6_16[7] = htons(ntohl(addr) & 65535);
+      if (pbits)
+        *pbits += 96;
+    }
+    return len;
+  } else if (input[0] == '*') {
+    unsigned int pos = 0;
+    while (input[++pos] == '*') ;
+    if (input[pos] != '\0')
+      return 0;
+    if (pbits)
+      *pbits = 0;
+    return pos;
+  } else return 0; /* parse failed */
+}

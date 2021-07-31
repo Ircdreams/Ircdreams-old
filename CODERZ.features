@@ -1,0 +1,25 @@
+
+                        -- [ -> IRCODERZ <- ] --
+                                        ircu2.10.11.04+coderz
+                --< CODERZ.features >--
+
+Voici la liste des fonctions ajoutées à ircu pour former la version actuelle d'ircoderz :
+
+-cryptage md2/md5 des hosts
+-mode ircop +p pour protéger les ircops
+-les ircops peuvent utiliser JOIN x pour joindre un salon +iklb (nécessite le privilège JOINX)
+-mode salon +c pour empecher d'utiliser des couleurs
+-mode salon +C pour empecher les ctcps
+-mode salon +N pour empecher les notices
+-SVSNICK et SVSMODE pour changer le nick ou le mode d'un user distant
+-SETHOST (avec umode +H) pour changer son host en une host virtuelle (block Sethost)
+-commande CHECK
+-gline sur les pseudos
+-propagation de notices globales (OPER et glines locales)
+-les ircops peuvent afficher les salons cachés (dans WHOIS ou LIST)
+-listage des modes pour un ircop dans LIST
+-autorisation des ircops, sous réserve de la possession du privilège OPERFREEMODE,
+ d'utiliser /mode sur un salon sans etre op
+-nouvelle version de WHO basée sur celle de bahamut
+-la vérification des idents est plus souple
+-feature DEFCHMODES

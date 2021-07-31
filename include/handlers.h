@@ -16,14 +16,16 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: handlers.h,v 1.22 2006/01/24 16:47:51 bugs Exp $
  */
-
+/** @file
+ * @brief Declarations for all protocol message handler functions.
+ * @version $Id: handlers.h,v 1.4 2005/10/09 18:45:22 progs Exp $
+ */
 #ifndef INCLUDED_handlers_h
 #define INCLUDED_handlers_h
 
-/*
+/** @page m_functions Protocol Message Handlers
+ *
  * m_functions execute protocol messages on this server:
  * int m_func(struct Client* cptr, struct Client* sptr, int parc, char* parv[]);
  *
@@ -83,10 +85,11 @@
  */
 
 struct Client;
-struct JoinBuf;
 
 extern int m_admin(struct Client*, struct Client*, int, char*[]);
 extern int m_away(struct Client*, struct Client*, int, char*[]);
+extern int m_cap(struct Client*, struct Client*, int, char*[]);
+extern int m_check(struct Client*, struct Client*, int, char*[]);
 extern int m_cnotice(struct Client*, struct Client*, int, char*[]);
 extern int m_cprivmsg(struct Client*, struct Client*, int, char*[]);
 extern int m_gline(struct Client*, struct Client*, int, char*[]);
@@ -119,6 +122,7 @@ extern int m_pong(struct Client*, struct Client*, int, char*[]);
 extern int m_private(struct Client*, struct Client*, int, char*[]);
 extern int m_privmsg(struct Client*, struct Client*, int, char*[]);
 extern int m_proto(struct Client*, struct Client*, int, char*[]);
+extern int m_pseudo(struct Client*, struct Client*, int, char*[]);
 extern int m_quit(struct Client*, struct Client*, int, char*[]);
 extern int m_registered(struct Client*, struct Client*, int, char*[]);
 extern int m_silence(struct Client*, struct Client*, int, char*[]);
@@ -137,8 +141,7 @@ extern int m_wallvoices(struct Client*, struct Client*, int, char*[]);
 extern int m_who(struct Client*, struct Client*, int, char*[]);
 extern int m_whois(struct Client*, struct Client*, int, char*[]);
 extern int m_whowas(struct Client*, struct Client*, int, char*[]);
-extern int m_x(struct Client*, struct Client*, int, char*[]);
-
+extern int m_sethost(struct Client*, struct Client*, int, char*[]);
 extern int mo_admin(struct Client*, struct Client*, int, char*[]);
 extern int mo_asll(struct Client*, struct Client*, int, char*[]);
 extern int mo_clearmode(struct Client*, struct Client*, int, char*[]);
@@ -152,7 +155,7 @@ extern int mo_jupe(struct Client*, struct Client*, int, char*[]);
 extern int mo_kill(struct Client*, struct Client*, int, char*[]);
 extern int mo_notice(struct Client*, struct Client*, int, char*[]);
 extern int mo_oper(struct Client*, struct Client*, int, char*[]);
-extern int mo_opmode(struct Client*, struct Client*, int, char*[]); 
+extern int mo_opmode(struct Client*, struct Client*, int, char*[]);
 extern int mo_ping(struct Client*, struct Client*, int, char*[]);
 extern int mo_privmsg(struct Client*, struct Client*, int, char*[]);
 extern int mo_privs(struct Client*, struct Client*, int, char*[]);
@@ -206,6 +209,7 @@ extern int ms_part(struct Client*, struct Client*, int, char*[]);
 extern int ms_ping(struct Client*, struct Client*, int, char*[]);
 extern int ms_pong(struct Client*, struct Client*, int, char*[]);
 extern int ms_privmsg(struct Client*, struct Client*, int, char*[]);
+extern int ms_privs(struct Client*, struct Client*, int, char*[]);
 extern int ms_quit(struct Client*, struct Client*, int, char*[]);
 extern int ms_rping(struct Client*, struct Client*, int, char*[]);
 extern int ms_rpong(struct Client*, struct Client*, int, char*[]);
@@ -219,39 +223,13 @@ extern int ms_trace(struct Client*, struct Client*, int, char*[]);
 extern int ms_uping(struct Client*, struct Client*, int, char*[]);
 extern int ms_version(struct Client*, struct Client*, int, char*[]);
 extern int ms_wallchops(struct Client*, struct Client*, int, char*[]);
-extern int ms_wallvoices(struct Client*, struct Client*, int, char*[]);
 extern int ms_wallops(struct Client*, struct Client*, int, char*[]);
 extern int ms_wallusers(struct Client*, struct Client*, int, char*[]);
+extern int ms_wallvoices(struct Client*, struct Client*, int, char*[]);
 extern int ms_whois(struct Client*, struct Client*, int, char*[]);
-extern int ms_svsnick(struct Client*, struct Client*, int, char*[]);
 extern int ms_svsmode(struct Client*, struct Client*, int, char*[]);
+extern int ms_svsnick(struct Client*, struct Client*, int, char*[]);
 extern int ms_sno(struct Client*, struct Client*, int, char*[]);
-
-/* requis pour IrcDreams */
-extern int mo_sanick(struct Client*, struct Client*, int, char*[]);
-extern int mo_samode(struct Client*, struct Client*, int, char*[]);
-extern int mo_sajoin(struct Client*, struct Client*, int, char*[]);
-extern int mo_sapart(struct Client*, struct Client*, int, char*[]);
-extern int m_opermotd(struct Client*, struct Client*, int, char*[]);
-extern int m_mkpasswd(struct Client*, struct Client*, int, char*[]);
-extern int mo_sahost(struct Client*, struct Client*, int, char*[]);
-extern int m_rules(struct Client*, struct Client*, int, char*[]);
-extern int m_shun(struct Client*, struct Client*, int, char*[]);
-extern int mo_shun(struct Client*, struct Client*, int, char*[]);
-extern int m_pseudo(struct Client*, struct Client*, int, char*[]);
-
-extern int ms_svshost(struct Client*, struct Client*, int, char*[]);
-extern int ms_svsjoin(struct Client*, struct Client*, int, char*[]);
-extern int ms_svspart(struct Client*, struct Client*, int, char*[]);
-extern int ms_opermotd(struct Client*, struct Client*, int, char*[]);
-extern int ms_vhost(struct Client *cptr, struct Client *sptr, int parc, char *parv[]);
-extern int ms_rules(struct Client*, struct Client*, int, char*[]);
-extern int ms_shun(struct Client*, struct Client*, int, char*[]);
-extern int ms_swhois(struct Client*, struct Client*, int, char*[]);
-
-/* commande pour m_join et forcejoin */
-extern char *last0(char *);
-extern int join0(struct JoinBuf *, struct Client *, struct Client *, char *);
 
 #endif /* INCLUDED_handlers_h */
 

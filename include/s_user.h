@@ -1,16 +1,12 @@
-/*
- * s_user.h
- *
- * $Id: s_user.h,v 1.20 2006/03/02 08:30:22 bugs Exp $
+/** @file s_user.h
+ * @brief Miscellaneous user-related helper functions.
+ * @version $Id: s_user.h,v 1.6 2005/10/23 23:31:01 progs Exp $
  */
 #ifndef INCLUDED_s_user_h
 #define INCLUDED_s_user_h
 #ifndef INCLUDED_sys_types_h
 #include <sys/types.h>
 #define INCLUDED_sys_types_h
-#ifndef INCLUDED_client_h
-#include "client.h"
-#endif
 #endif
 
 struct Client;
@@ -25,14 +21,14 @@ struct Flags;
  * Macros
  */
 
-/*
- * Nick flood limit
+/**
+ * Nick flood limit.
  * Minimum time between nick changes.
  * (The first two changes are allowed quickly after another however).
  */
 #define NICK_DELAY 30
 
-/*
+/**
  * Target flood time.
  * Minimum time between target changes.
  * (MAXTARGETS are allowed simultaneously however).
@@ -42,66 +38,54 @@ struct Flags;
 
 /* return values for hunt_server() */
 
-#define HUNTED_NOSUCH   (-1)    /* if the hunted server is not found */
-#define HUNTED_ISME     0       /* if this server should execute the command */
-#define HUNTED_PASS     1       /* if message passed onwards successfully */
+#define HUNTED_NOSUCH   (-1)    /**< if the hunted server is not found */
+#define HUNTED_ISME     0       /**< if this server should execute the command */
+#define HUNTED_PASS     1       /**< if message passed onwards successfully */
 
 /* send sets for send_umode() */
-#define ALL_UMODES           0  /* both local and global user modes */
-#define SEND_UMODES          1  /* global user modes only */
-#define SEND_UMODES_BUT_OPER 2  /* global user modes except for FLAG_OPER */
+#define ALL_UMODES 0  /**< both local and global user modes */
+#define SEND_UMODES 1  /**< global user modes only */
+#define SEND_UMODES_BUT_OPER 2  /**< global user modes except for FLAG_OPER */
 
 /* used when sending to #mask or $mask */
 
-#define MATCH_SERVER  1
-#define MATCH_HOST    2
+#define MATCH_SERVER  1 /**< flag for relay_masked_message (etc) to indicate the mask matches a server name */
+#define MATCH_HOST    2 /**< flag for relay_masked_message (etc) to indicate the mask matches host name */
 
-#define COOKIE_VERIFIED 0xffffffff
+#define COOKIE_VERIFIED 0xffffffff /**< value for cli_cookie() to show completion */
 
-extern struct SLink *opsarray[];
-
+/** List of user mode characters. */
 static const struct UserMode {
-  unsigned int flag;
-  char         c;
+  unsigned int flag; /**< User mode constant. */
+  char         c;    /**< Character corresponding to the mode. */
 } userModeList[] = {
-  { FLAG_PROTECT,     'Z' },
-  { FLAG_ACCOUNT,     'r' },
   { FLAG_OPER,        'o' },
-  { FLAG_DEBUG,       'g' },
-  { FLAG_SERVNOTICE,  's' },
+  { FLAG_LOCOP,       'O' },
   { FLAG_INVISIBLE,   'i' },
   { FLAG_WALLOP,      'w' },
+  { FLAG_SERVNOTICE,  's' },
   { FLAG_DEAF,        'd' },
   { FLAG_CHSERV,      'k' },
+  { FLAG_DEBUG,       'g' },
+  { FLAG_ACCOUNT,     'r' },
   { FLAG_HIDDENHOST,  'x' },
-  { FLAG_FEMALE,      'f' },
-  { FLAG_MALE,        'h' },
-  { FLAG_ADMIN,       'a' },
-  { FLAG_WANTRESTART, 'D' },
-  { FLAG_SETHOST,     'H' },
-  { FLAG_NOPRIVATE,   'P' },
-  { FLAG_HELPER,      'A' },
-  { FLAG_PACCONLY,    'R' },
-  { FLAG_NOIDLE,      'I' },
-  { FLAG_NOCHAN,      'C' },
-  { FLAG_WHOIS,       'W' },
-  { FLAG_HIDE,	      'X' },
-  { FLAG_HIDEOPER,    'S' }
-
+  { FLAG_PROTECTED,   'p' },
+  { FLAG_SETHOST,     'H' }
 };
 
+/** Length of #userModeList. */
 #define USERMODELIST_SIZE sizeof(userModeList) / sizeof(struct UserMode)
 
+/** Formatter function for send_user_info().
+ * @param who Client being displayed.
+ * @param sptr Client requesting information.
+ * @param buf Message buffer that should receive the response text.
+ */
 typedef void (*InfoFormatter)(struct Client* who, struct Client *sptr, struct MsgBuf* buf);
 
 /*
  * Prototypes
  */
-typedef struct User anUser;
-
-u_int32_t makeid(unsigned char *key, unsigned char *host);
-extern int protecthost(char *, char *);
-
 extern struct User* make_user(struct Client *cptr);
 extern void         free_user(struct User *user);
 extern int          register_user(struct Client* cptr, struct Client* sptr,
@@ -112,19 +96,16 @@ extern void         user_count_memory(size_t* count_out, size_t* bytes_out);
 extern int set_nick_name(struct Client* cptr, struct Client* sptr,
                          const char* nick, int parc, char* parv[]);
 extern void send_umode_out(struct Client* cptr, struct Client* sptr,
-			   struct Flags* old, int prop);
+                          struct Flags* old, int prop);
 extern int whisper(struct Client* source, const char* nick,
                    const char* channel, const char* text, int is_notice);
 extern void send_user_info(struct Client* to, char* names, int rpl,
                            InfoFormatter fmt);
-extern int add_silence(struct Client* sptr, const char* mask);
 
-extern int hide_hostmask(struct Client *cptr, unsigned int flag);
+extern int hide_hostmask(struct Client *cptr, unsigned int flags);
 extern int set_user_mode(struct Client *cptr, struct Client *sptr,
                          int parc, char *parv[]);
 extern int is_silenced(struct Client *sptr, struct Client *acptr);
-extern int hunt_server(int, struct Client *cptr, struct Client *sptr,
-    char *command, int server, int parc, char *parv[]);
 extern int hunt_server_cmd(struct Client *from, const char *cmd,
 			   const char *tok, struct Client *one,
 			   int MustBeOper, const char *pattern, int server,
@@ -137,7 +118,6 @@ extern struct Client* next_client(struct Client* next, const char* ch);
 extern char *umode_str(struct Client *cptr);
 extern void send_umode(struct Client *cptr, struct Client *sptr,
                        struct Flags *old, int sendset);
-extern int del_silence(struct Client *sptr, char *mask);
 extern void set_snomask(struct Client *, unsigned int, int);
 extern int is_snomask(char *);
 extern int check_target_limit(struct Client *sptr, void *target, const char *name,
@@ -146,15 +126,20 @@ extern void add_target(struct Client *sptr, void *target);
 extern unsigned int umode_make_snomask(unsigned int oldmask, char *arg,
                                        int what);
 extern int send_supported(struct Client *cptr);
-extern int set_hostmask(struct Client *cptr, char *hostmask);
+extern int protecthost(char *host, char *crypt);
 
-extern int do_nick_name(char* nick);
-
-#define NAMES_ALL 1 /* List all users in channel */
-#define NAMES_VIS 2 /* List only visible users in non-secret channels */
-#define NAMES_EON 4 /* Add an 'End Of Names' reply to the end */
-#define NAMES_DEL 8 /* Show delayed joined users only */
+#define NAMES_ALL 1 /**< List all users in channel */
+#define NAMES_VIS 2 /**< List only visible users in non-secret channels */
+#define NAMES_EON 4 /**< Add an 'End Of Names' reply to the end */
+#define NAMES_DEL 8 /**< Show delayed joined users only */
 
 void do_names(struct Client* sptr, struct Channel* chptr, int filter);
+int set_vhost(struct Client *cptr, char* hostmask, char* password, int myuser);
+
+extern void init_isupport(void);
+extern void add_isupport(const char *name);
+extern void add_isupport_i(const char *name, int value);
+extern void add_isupport_s(const char *name, const char *value);
+extern void del_isupport(const char *name);
 
 #endif /* INCLUDED_s_user_h */

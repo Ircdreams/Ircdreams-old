@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_stats.c,v 1.4 2005/01/24 01:19:23 bugs Exp $
+ * $Id: m_stats.c,v 1.2 2005/10/15 10:00:12 progs Exp $
  */
 
 /*
@@ -79,24 +79,22 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
-#include "s_stats.h"
 #include "client.h"
 #include "ircd.h"
 #include "ircd_features.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "msg.h"
 #include "numeric.h"
+#include "s_stats.h"
 #include "s_user.h"
 #include "send.h"
-#ifdef USE_SSL
-#include "ssl.h"
-#endif /* USE_SSL */
-#include "ircd_struct.h"
+#include "struct.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <stdlib.h>
 #include <string.h>
 
@@ -120,15 +118,12 @@
 int
 m_stats(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 {
-  unsigned char stat = parc > 1 ? parv[1][0] : '\0';
-  struct StatDesc *sd;
+  const struct StatDesc *sd;
   char *param = 0;
 
   /* If we didn't find a descriptor and this is my client, send them help */
-  if (!(sd = statsmap[(int)stat])) {
-    stat = '*';
-    sd = statsmap[(int)stat];
-  }
+  if ((parc < 2) || !(sd = stats_find(parv[1])))
+      parv[1] = "*", sd = stats_find("*");
 
   assert(sd != 0);
 
@@ -140,6 +135,10 @@ m_stats(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   if (!IsPrivileged(cptr) &&
       ((sd->sd_flags & STAT_FLAG_OPERONLY) ||
        ((sd->sd_flags & STAT_FLAG_OPERFEAT) && feature_bool(sd->sd_control))))
+    return send_reply(cptr, ERR_NOPRIVILEGES);
+
+  /* Check if they are a local user */
+  if ((sd->sd_flags & STAT_FLAG_LOCONLY) && !MyUser(cptr))
     return send_reply(cptr, ERR_NOPRIVILEGES);
 
   /* Check for extra parameter */
@@ -155,8 +154,8 @@ m_stats(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   assert(sd->sd_func != 0);
 
   /* Ok, dispatch the stats function */
-  (*sd->sd_func)(sptr, sd, stat, param);
+  (*sd->sd_func)(sptr, sd, param);
 
   /* Done sending them the stats */
-  return send_reply(sptr, RPL_ENDOFSTATS, stat);
+  return send_reply(sptr, RPL_ENDOFSTATS, parv[1]);
 }

@@ -26,11 +26,10 @@ SHELL = @SHPROG@
 RM = @RMPROG@
 AWK = @AWK@
 @SET_MAKE@
-
 #### End of system configuration section. ####
 
-SUBDIRS = ircd
-IRCD_MAKEFILES = Makefile ircd/Makefile
+SUBDIRS = doc ircd ircd/test
+IRCD_MAKEFILES = Makefile doc/Makefile ircd/Makefile ircd/test/Makefile
 
 all: build
 
@@ -41,10 +40,7 @@ all: build
 build: ${IRCD_MAKEFILES}
 	@for i in ${SUBDIRS}; do \
 		echo "Building $$i..."; \
-		cd $$i; \
-		if test "x#" != "x@USECCDV@"; then ${MAKE} build; \
-		else ${MAKE} -s build; fi; \
-		cd ..; \
+		cd $$i; ${MAKE} build; cd ..; \
 	done
 
 config:
@@ -70,7 +66,7 @@ root-clean:
 sub-clean: ${IRCD_MAKEFILES}
 	@for i in ${SUBDIRS}; do \
 		echo "Cleaning $$i..."; \
-		cd $$i; ${MAKE} -s clean; cd ..;\
+		cd $$i; ${MAKE} clean; cd ..;\
 	done
 
 clean: root-clean sub-clean
@@ -85,48 +81,48 @@ root-distclean: root-clean
 sub-distclean: ${IRCD_MAKEFILES}
 	@for i in ${SUBDIRS}; do \
 		echo "Dist-cleaning $$i..."; \
-		cd $$i; ${MAKE} -s distclean; cd ..;\
+		cd $$i; ${MAKE} distclean; cd ..;\
 	done
 
 distclean: root-distclean sub-distclean
 	${RM} -f Makefile config.h config.log config.cache config.status \
-		stamp-h
+		stamp-h .#* *~
 
 maintainer-clean: root-distclean ${IRCD_MAKEFILES}
 	@for i in ${SUBDIRS}; do \
 		echo "maintainer-cleaning $$i..."; \
-		cd $$i; ${MAKE} -s maintainer-clean; cd ..;\
+		cd $$i; ${MAKE} maintainer-clean; cd ..;\
 	done
 
 depend: ${IRCD_MAKEFILES}
 	@for i in ${SUBDIRS}; do \
 		echo "Making dependencies in $$i..."; \
-		cd $$i; ${MAKE} -s depend; cd ..; \
+		cd $$i; ${MAKE} depend; cd ..; \
 	done
 
 install: ${IRCD_MAKEFILES}
-	@test -d ${prefix} || mkdir ${prefix}
+	test -d ${prefix} || mkdir ${prefix}
 	@for i in ${SUBDIRS}; do \
 		echo "Installing $$i..."; \
-		cd $$i; ${MAKE} -s install; cd ..; \
+		cd $$i; ${MAKE} install; cd ..; \
 	done
 
 uninstall: ${IRCD_MAKEFILES}
 	@for i in ${SUBDIRS}; do \
 		echo "Uninstalling $$i..."; \
-		cd $$i; ${MAKE} -s uninstall; cd ..; \
+		cd $$i; ${MAKE} uninstall; cd ..; \
 	done
 
 ${srcdir}/aclocal.m4: acinclude.m4
-	cd ${srcdir} && aclocal
+#	cd ${srcdir} && aclocal
 
 ${srcdir}/configure: configure.in aclocal.m4
-	cd ${srcdir} && autoconf
+#	cd ${srcdir} && autoconf
 
 # autoheader might not change config.h.in, so touch a stamp file.
 ${srcdir}/config.h.in: stamp-h.in
 ${srcdir}/stamp-h.in: configure.in aclocal.m4 acconfig.h
-	cd ${srcdir} && autoheader
+#	cd ${srcdir} && autoheader
 	echo timestamp > ${srcdir}/stamp-h.in
 
 config.h: stamp-h
@@ -136,7 +132,13 @@ stamp-h: config.h.in config.status
 Makefile: Makefile.in config.status
 	./config.status
 
+doc/Makefile: doc/Makefile.in config.status
+	./config.status
+
 ircd/Makefile: ircd/Makefile.in config.status
+	./config.status
+
+ircd/test/Makefile: ircd/test/Makefile.in config.status
 	./config.status
 
 config.status: configure

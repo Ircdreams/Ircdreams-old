@@ -21,14 +21,16 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: ircd_relay.h,v 1.2 2005/06/04 13:33:39 bugs Exp $
+ */
+/** @file
+ * @brief Interface to functions for relaying messages.
+ * @version $Id: ircd_relay.h,v 1.1.1.1 2005/10/01 17:26:55 progs Exp $
  */
 
 struct Client;
 
-extern void relay_channel_message(struct Client* sptr, const char* name, const char* text, int total);
-extern void relay_channel_notice(struct Client* sptr, const char* name, const char* text, int total);
+extern void relay_channel_message(struct Client* sptr, const char* name, const char* text);
+extern void relay_channel_notice(struct Client* sptr, const char* name, const char* text);
 extern void relay_directed_message(struct Client* sptr, char* name, char* server, const char* text);
 extern void relay_directed_notice(struct Client* sptr, char* name, char* server, const char* text);
 extern void relay_masked_message(struct Client* sptr, const char* mask, const char* text);

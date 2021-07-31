@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_motd.c,v 1.2 2005/01/24 01:52:33 bugs Exp $
+ * $Id: m_motd.c,v 1.1.1.1 2005/10/01 17:28:01 progs Exp $
  */
 
 /*
@@ -79,11 +79,12 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "ircd.h"
 #include "ircd_features.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "match.h"
@@ -97,7 +98,7 @@
 #include "send.h"
 
 #include <stdlib.h>
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 
 /*
  * m_motd - generic message handler
@@ -115,8 +116,8 @@
  */
 int m_motd(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 {
-  if (hunt_server_cmd(sptr, CMD_MOTD, cptr, feature_int(FEAT_HIS_REMOTE),
-		      "%C", 1, parc, parv) != HUNTED_ISME)
+  if (hunt_server_cmd(sptr, CMD_MOTD, cptr, feature_int(FEAT_HIS_REMOTE), "%C", 1,
+		      parc, parv) != HUNTED_ISME)
     return 0;
 
   return motd_send(sptr);

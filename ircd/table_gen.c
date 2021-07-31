@@ -29,11 +29,11 @@
  * macros actually used by the server instead DO work and have been tested
  * on platforms where0 char is both signed or unsigned, this is true as long
  * as the <limits.h> macros are set properly and without any need to rebuild
- * the tables (wich as said an admin should NEVER do, tables need to be rebuilt
+ * the tables (which as said an admin should NEVER do, tables need to be rebuilt
  * only when one wants to really change the results or when one has to
  * compile on architectures where a char is NOT eight bits [?!], yes
  * it all is supposed to work in that case too... but I can't test it
- * because I've not found a machine in the world where this happes).
+ * because I've not found a machine in the world where this happens).
  *
  * NEVER -f[un]signed-char on gcc since that does NOT fix the named macros
  * and you end up in a non-ANSI environment where CHAR_MIN and CHAR_MAX
@@ -41,7 +41,7 @@
  * both admins and coders.
  *
  */
-#include "../config.h"
+#include "config.h"
 
 #include "ircd_chattr.h"
 #include <stdlib.h>
@@ -77,7 +77,7 @@ static void makeTables(void)
   markString(NTL_LOWER, "{|}~");
 
   markRange(NTL_UPPER, 'A', 'Z');
-  markString(NTL_UPPER, "<([\\])>.^éèîïêùçàâûüëñõôö");
+  markString(NTL_UPPER, "[\\]^");
 
   markRange(NTL_DIGIT, '0', '9');
 
@@ -98,8 +98,8 @@ static void makeTables(void)
   moveMacro(NTL_GRAPH, NTL_PRINT);
   markString(NTL_PRINT, " ");
 
-  markRange(NTL_IRCCH, 0, (char) UCHAR_MAX);
-  unMarkString(NTL_IRCCH, "\007\040\054\240");
+  markRange(NTL_IRCCH, '\041', (char) UCHAR_MAX);
+  unMarkString(NTL_IRCCH, "\054\240");
 
   markRange(NTL_IRCCL, '\300', '\326');
   markRange(NTL_IRCCL, '\330', '\336');
@@ -109,6 +109,9 @@ static void makeTables(void)
 
   moveMacro(NTL_DIGIT, NTL_IRCIP);
   markString(NTL_IRCIP, ".");
+
+  moveMacro(NTL_DIGIT, NTL_IRCIP6);
+  markString(NTL_IRCIP6, ":.ABCDEFabcdef");
 
   moveMacro(NTL_DIGIT | NTL_ALPHA, NTL_IRCNK);
   markString(NTL_IRCNK, "-_`");
@@ -267,28 +270,28 @@ static void dumphb(char *tbl, int beg)
 {
   int i, j, k;
   char *p = &tbl[beg - CHAR_MIN];
-  char c;
+  unsigned char c;
   for (i = 0; i <= SCHAR_MAX; i += ROWSIZE)
   {
     k = i + ROWSIZE - 1;
     if (k > SCHAR_MAX)
       k = SCHAR_MAX;
 
-    c = (char)(beg + i);
+    c = (unsigned char)(beg + i);
     printf("/*");
     if ((c > 0) && (c < SCHAR_MAX) && (isprint(c)) && (c != '\\')
 	&& (c != '\''))
       printf(" '%c'", c);
     else
-      printf(" x%02x", ((int)((unsigned char)c)));
+      printf(" x%02x", ((int)c));
 
-    c = (char)(beg + k);
+    c = (unsigned char)(beg + k);
     printf("-");
     if ((c > 0) && (c < SCHAR_MAX) && (isprint(c)) && (c != '\\')
 	&& (c != '\''))
       printf("'%c'", c);
     else
-      printf("x%02x", ((int)((unsigned char)c)));
+      printf("x%02x", ((int)c));
     printf(" */");
 
     for (j = i; j <= k; j++)
@@ -298,7 +301,7 @@ static void dumphb(char *tbl, int beg)
 	  && (c != '\''))
 	printf("    '%c'", c);
       else
-	printf(" '\\x%02x'", ((int)((unsigned char)c)));
+	printf(" '\\x%02x'", ((int)c));
       if (j < SCHAR_MAX)
 	printf(",");
     }
@@ -310,28 +313,28 @@ static void dumphw(int *tbl, int beg)
 {
   int i, j, k;
   int *p = &tbl[beg - CHAR_MIN];
-  char c;
+  unsigned char c;
   for (i = 0; i <= SCHAR_MAX; i += ROWSIZE)
   {
     k = i + ROWSIZE - 1;
     if (k > SCHAR_MAX)
       k = SCHAR_MAX;
 
-    c = (char)(beg + i);
+    c = (unsigned char)(beg + i);
     printf("/*");
     if ((c > 0) && (c < SCHAR_MAX) && (isprint(c)) && (c != '\\')
 	&& (c != '\''))
       printf(" '%c'", c);
     else
-      printf(" x%02x", ((int)((unsigned char)c)));
+      printf(" x%02x", ((int)c));
 
-    c = (char)(beg + k);
+    c = (unsigned char)(beg + k);
     printf("-");
     if ((c > 0) && (c < SCHAR_MAX) && (isprint(c)) && (c != '\\')
 	&& (c != '\''))
       printf("'%c'", c);
     else
-      printf("x%02x", ((int)((unsigned char)c)));
+      printf("x%02x", ((int)c));
     printf(" */");
 
     for (j = i; j <= k; j++)

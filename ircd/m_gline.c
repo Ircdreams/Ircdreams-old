@@ -20,7 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_gline.c,v 1.3 2005/01/24 01:52:33 bugs Exp $
+ * $Id: m_gline.c,v 1.3 2005/10/15 09:57:47 progs Exp $
  */
 
 /*
@@ -79,13 +79,14 @@
  *            note:   it is guaranteed that parv[0]..parv[parc-1] are all
  *                    non-NULL pointers.
  */
-#include "../config.h"
+#include "config.h"
 
 #include "client.h"
 #include "gline.h"
 #include "hash.h"
 #include "ircd.h"
 #include "ircd_features.h"
+#include "ircd_log.h"
 #include "ircd_reply.h"
 #include "ircd_string.h"
 #include "match.h"
@@ -95,9 +96,8 @@
 #include "s_conf.h"
 #include "s_misc.h"
 #include "send.h"
-#include "support.h"
 
-#include <assert.h>
+/* #include <assert.h> -- Now using assert in ircd_log.h */
 #include <stdlib.h>
 #include <string.h>
 
@@ -128,46 +128,50 @@ ms_gline(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
   time_t expire_off = 0, lastmod = 0;
   char *mask = parv[2], *target = parv[1], *reason = "No reason";
 
-  if (*mask == '!') {
+  if (*mask == '!')
+  {
     mask++;
-
     flags |= GLINE_OPERFORCE; /* assume oper had WIDE_GLINE */
   }
 
-  if ((parc == 3 && *mask != '-') || parc == 5) {
+  if ((parc == 3 && *mask != '-') || parc == 5)
+  {
     if (!find_conf_byhost(cli_confs(cptr), cli_name(sptr), CONF_UWORLD))
       return need_more_params(sptr, "GLINE");
 
-  if (parc > 4)
+    if (parc > 4)
       reason = parv[4];
     flags |= GLINE_FORCE;
-  } else if (parc > 5) {
+  }
+  else if (parc > 5)
+  {
     lastmod = atoi(parv[4]);
     reason = parv[5];
-  } else if(*mask != '-' && parc < 4)
+  }
+  else if(*mask != '-' && parc < 4)
     return need_more_params(sptr, "GLINE");
 
   if (IsServer(sptr))
     flags |= GLINE_FORCE;
 
   if (!(target[0] == '*' && target[1] == '\0')) {
-    if (!( (acptr = FindNServer(target)) ||
-           (acptr = SeekServer(target)) ) )
+    if (!(acptr = FindNServer(target)))
       return 0; /* no such server */
 
     if (!IsMe(acptr)) { /* manually propagate */
       if (!lastmod)
 	sendcmdto_one(sptr, CMD_GLINE, acptr,
-		      (parc == 3) ? "%s %s" : "%s %s %s :%s", target, mask,
+		      (parc == 3) ? "%C %s" : "%C %s %s :%s", acptr, mask,
 		      parv[3], reason);
       else
-	sendcmdto_one(sptr, CMD_GLINE, acptr, "%s %s%s %s %s :%s", target,
+	sendcmdto_one(sptr, CMD_GLINE, acptr, "%C %s%s %s %s :%s", acptr,
 		      flags & GLINE_OPERFORCE ? "!" : "", mask, parv[3],
 		      parv[4], reason);
 
       return 0;
     }
-	flags |= GLINE_LOCAL;
+
+    flags |= GLINE_LOCAL;
   }
 
   if (*mask == '-')
@@ -183,16 +187,6 @@ ms_gline(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
   agline = gline_find(mask, GLINE_ANY | GLINE_EXACT);
 
   if (agline) {
-  	if (!(flags & GLINE_ACTIVE)) /* gline -host */
-	{
-		if(!(flags & GLINE_LOCAL)) /* remove global */
-			return gline_deactivate(cptr, sptr, agline, lastmod, flags);
-		else if(GlineIsLocal(agline)) /* Remove local */
-			return gline_deactivate(cptr, sptr, agline, lastmod, flags);
-		else
-			return 0; /* Remove local, global en place */
-	}
-
     if (GlineIsLocal(agline) && !(flags & GLINE_LOCAL)) /* global over local */
       gline_free(agline);
     else if (!lastmod && ((flags & GLINE_ACTIVE) == GlineIsRemActive(agline)))
@@ -206,8 +200,11 @@ ms_gline(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
       return 0;
     else
       return gline_resend(cptr, agline); /* other server desynched WRT gline */
-  } else if (!(flags & GLINE_ACTIVE)) {
-    if (!(flags & GLINE_LOCAL)) /* Pas de gline trouvée, propagation qd meme */
+  } else if (parc == 3 && !(flags & GLINE_ACTIVE)) {
+    /* U-lined server removing a G-line we don't have; propagate the removal
+     * anyway.
+     */
+    if (!(flags & GLINE_LOCAL))
       sendcmdto_serv_butone(sptr, CMD_GLINE, cptr, "* -%s", mask);
     return 0;
   } else if (parc < 5)
@@ -240,10 +237,8 @@ mo_gline(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
   struct Client *acptr = 0;
   struct Gline *agline;
   unsigned int flags = 0;
-  time_t expire_off = 0;
-  char *mask = parv[1], *target = 0, *reason = "Aucune Raison", all[2] = {0};
-
-  strcpy(all, "*");
+  time_t expire_off;
+  char *mask = parv[1], *target = 0, *reason;
 
   if (parc < 2)
     return gline_list(sptr, 0);
@@ -264,71 +259,68 @@ mo_gline(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
   else
     return gline_list(sptr, mask);
 
-	if (!(flags & GLINE_ACTIVE)) {
-		if(parc >= 3) target = parv[2];
-		else target = all;
-	} else if (parc == 4) {
-		expire_off = atoi(parv[2]);
-		reason = parv[3];
-		flags |= GLINE_LOCAL;
-	} else if (parc > 4) {
-		target = parv[2];
-		expire_off = atoi(parv[3]);
-		reason = parv[4];
-	} else
-		return need_more_params(sptr, "GLINE");
+  if (parc == 4) {
+    expire_off = atoi(parv[2]);
+    reason = parv[3];
+    flags |= GLINE_LOCAL;
+  } else if (parc > 4) {
+    target = parv[2];
+    expire_off = atoi(parv[3]);
+    reason = parv[4];
+  } else
+    return need_more_params(sptr, "GLINE");
 
-	if (target) {
-		if (!(target[0] == '*' && target[1] == '\0')) {
-			if (!(acptr = find_match_server(target)))
-				return send_reply(sptr, ERR_NOSUCHSERVER, target);
+  if (target)
+  {
+    if (!(target[0] == '*' && target[1] == '\0'))
+    {
+      if (!(acptr = find_match_server(target)))
+	return send_reply(sptr, ERR_NOSUCHSERVER, target);
 
-			if (!IsMe(acptr)) { /* manually propagate, since we don't set it */
-				if (!feature_bool(FEAT_CONFIG_OPERCMDS))
-					return send_reply(sptr, ERR_DISABLED, "GLINE");
+      /* manually propagate, since we don't set it */
+      if (!IsMe(acptr))
+      {
+	if (!feature_bool(FEAT_CONFIG_OPERCMDS))
+	  return send_reply(sptr, ERR_DISABLED, "GLINE");
 
-				if (!HasPriv(sptr, PRIV_GLINE))
-					return send_reply(sptr, ERR_NOPRIVILEGES);
+	if (!HasPriv(sptr, PRIV_GLINE))
+	  return send_reply(sptr, ERR_NOPRIVILEGES);
 
-				if(flags & GLINE_ACTIVE)
-					sendcmdto_one(sptr, CMD_GLINE, acptr, "%C %s+%s %s %Tu :%s", acptr,
-							flags & GLINE_OPERFORCE ? "!" : "",
-							mask, parv[3],
-							TStime(), reason);
-				else
-					sendcmdto_one(sptr, CMD_GLINE, acptr, "%C %s-%s %s", acptr,
-							flags & GLINE_OPERFORCE ? "!" : "",
-							mask, target);
-				return 0;
-			}
+	sendcmdto_one(sptr, CMD_GLINE, acptr, "%C %s%c%s %s %Tu :%s", acptr,
+		      flags & GLINE_OPERFORCE ? "!" : "",
+		      flags & GLINE_ACTIVE ? '+' : '-', mask, parv[3],
+		      TStime(), reason);
+	return 0;
+      }
+      flags |= GLINE_LOCAL;
+    }
+  }
 
-			flags |= GLINE_LOCAL;
-		}
-	}
+  if (!(flags & GLINE_LOCAL) && !feature_bool(FEAT_CONFIG_OPERCMDS))
+    return send_reply(sptr, ERR_DISABLED, "GLINE");
 
-	if (!(flags & GLINE_LOCAL) && !feature_bool(FEAT_CONFIG_OPERCMDS))
-		return send_reply(sptr, ERR_DISABLED, "GLINE");
+  if (!HasPriv(sptr, (flags & GLINE_LOCAL ? PRIV_LOCAL_GLINE : PRIV_GLINE)))
+    return send_reply(sptr, ERR_NOPRIVILEGES);
 
-	if (!CanGline(sptr) || !HasPriv(sptr, (flags & GLINE_LOCAL ? PRIV_LOCAL_GLINE : PRIV_GLINE)))
-		return send_reply(sptr, ERR_NOPRIVILEGES);
+  agline = gline_find(mask, GLINE_ANY | GLINE_EXACT);
 
-	agline = gline_find(mask, GLINE_ANY | GLINE_EXACT);
-	if (agline) {
-		if (GlineIsLocal(agline)) /* Locale en place */
-		{
-			/* On vire la locale dans le cas d'une délétion locale ou globale */
-			if(!(flags & GLINE_ACTIVE)) return gline_deactivate(cptr, sptr, agline, 0, flags);
-			if(flags & GLINE_LOCAL) return 0; /* local over local = return */
-			gline_free(agline); /* global over local */
-		} else { /* on a une globale en place */
-			if(!(flags & GLINE_ACTIVE)) /* deletion globale */
-				return gline_deactivate(cptr, sptr, agline,
-						0, (flags &= ~GLINE_LOCAL)/* Meme si /gline -host target, deletion globale */);
-			if(flags & GLINE_LOCAL) return 0; /* local over global = return */
-		}
-	}
-	if(!(flags & GLINE_ACTIVE)) return 0; /* /gline -host avec gline inconnue */
-	return gline_add(cptr, sptr, mask, reason, expire_off, TStime(), flags);
+  if (agline) {
+    if (GlineIsLocal(agline) && !(flags & GLINE_LOCAL)) /* global over local */
+      gline_free(agline);
+    else {
+      if (!GlineLastMod(agline)) /* force mods to Uworld-set G-lines local */
+	flags |= GLINE_LOCAL;
+
+      if (flags & GLINE_ACTIVE)
+	return gline_activate(cptr, sptr, agline,
+			      GlineLastMod(agline) ? TStime() : 0, flags);
+      else
+	return gline_deactivate(cptr, sptr, agline,
+				GlineLastMod(agline) ? TStime() : 0, flags);
+    }
+  }
+
+  return gline_add(cptr, sptr, mask, reason, expire_off, TStime(), flags);
 }
 
 /*
@@ -343,6 +335,9 @@ m_gline(struct Client *cptr, struct Client *sptr, int parc, char *parv[])
 {
   if (parc < 2)
     return send_reply(sptr, ERR_NOSUCHGLINE, "");
+
+  if (!feature_bool(FEAT_USER_GLIST))
+  	     return send_reply(sptr, ERR_DISABLED, "GLINE");
 
   return gline_list(sptr, parv[1]);
 }

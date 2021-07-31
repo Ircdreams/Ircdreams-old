@@ -17,10 +17,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: s_numeric.c,v 1.4 2005/01/24 01:19:24 bugs Exp $
  */
-#include "../config.h"
+/** @file
+ * @brief Send a numeric message to a client.
+ * @version $Id: s_numeric.c,v 1.1.1.1 2005/10/01 17:28:33 progs Exp $
+ */
+#include "config.h"
 
 #include "s_numeric.h"
 #include "channel.h"
@@ -31,7 +33,7 @@
 #include "ircd_snprintf.h"
 #include "numnicks.h"
 #include "send.h"
-#include "ircd_struct.h"
+#include "struct.h"
 
 
 /*
@@ -41,9 +43,18 @@
  * Called when we get a numeric message from a remote _server_ and we are
  * supposed to forward it somewhere. Note that we always ignore numerics sent
  * to 'me' and simply drop the message if we can't handle with this properly:
- * the savy approach is NEVER generate an error in response to an... error :)
+ * the savvy approach is NEVER generate an error in response to an... error :)
  */
 
+/** Forwards a numeric message from a remote server.
+ * @param numeric Value of numeric message.
+ * @param nnn If non-zero, treat parv[1] as a numnick; else as a client name.
+ * @param cptr Client that originated the numeric.
+ * @param sptr Peer that sent us the numeric.
+ * @param parc Count of valid arguments in \a parv.
+ * @param parv Argument list.
+ * @return Zero (always).
+ */
 int do_numeric(int numeric, int nnn, struct Client *cptr, struct Client *sptr,
     int parc, char *parv[])
 {
@@ -79,15 +90,17 @@ int do_numeric(int numeric, int nnn, struct Client *cptr, struct Client *sptr,
 
   ircd_snprintf(0, num, sizeof(num), "%03d", numeric);
 
-  /* Since 2.10.10.pl14 we rewrite numerics from remote servers to appear
-   * to come from the local server.
+  /* Since 2.10.10.pl14 we rewrite numerics from remote servers to appear to
+   * come from the local server
    */
-    if (acptr)
-      sendcmdto_one(feature_bool(FEAT_HIS_REWRITE) && !IsOper(acptr) ?
-		    &me : sptr, num, num, acptr, "%C %s", acptr, parv[2]);
-    else
-      sendcmdto_channel_butone(feature_bool(FEAT_HIS_REWRITE) ? &me : sptr,
-		num, num, achptr, cptr, SKIP_DEAF | SKIP_BURST,
-		"%H %s", achptr, parv[2]);
+  if (acptr)
+    sendcmdto_one((feature_bool(FEAT_HIS_REWRITE) && !IsOper(acptr)) ?
+                    &me : sptr,
+                  num, num, acptr, "%C %s", acptr, parv[2]);
+  else
+    sendcmdto_channel_butone((feature_bool(FEAT_HIS_REWRITE) && !IsOper(acptr)) ?
+                               &me : sptr,
+                             num, num, achptr, cptr, SKIP_DEAF | SKIP_BURST,
+                             "%H %s", achptr, parv[2]);
   return 0;
 }

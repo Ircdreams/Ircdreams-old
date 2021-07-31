@@ -15,12 +15,19 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: patchlevel.h,v 1.143 2006/03/20 16:08:16 bugs Exp $
+ *
  *
  */
-#define PATCHLEVEL "1"
 
-#define RELEASE ".25."
+#define PATCH_PATCH "Dev"
+#define PATCH_VERSION "3.0"
+#define PATCH_NAME "+IrcDreams"
+
+#define PATCH PATCH_NAME PATCH_VERSION PATCH_PATCH
+
+#define PATCHLEVEL "0"
+
+#define RELEASE ".12."
 
 /*
  * Deliberate empty lines
@@ -28,7 +35,7 @@
 /* Do NOT edit those: */
 
 #ifndef BASE_VERSION
-#define BASE_VERSION "IrcDreams 2"
+#define BASE_VERSION "u2.10"
 #endif
 
 #ifndef MAJOR_PROTOCOL
