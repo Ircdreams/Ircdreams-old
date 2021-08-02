@@ -293,7 +293,7 @@ do_gline(struct Client *cptr, struct Client *sptr, struct Gline *gline)
         	   gline->gl_reason);
 
         /* let the ops know about it */
-        sendto_allops(&me, SNO_GLINE, "G-line actif pour %s sur %s",
+        sendto_allops(&me, SNO_GLINE, "G-line active for %s in %s",
 			get_client_name(acptr, SHOW_IP), cli_name(&me));
 
         /* and get rid of him */
@@ -465,7 +465,7 @@ gline_add(struct Client *cptr, struct Client *sptr, char *userhost,
   /* Inform ops... */
 if(!(flags & GLINE_LOCAL)) {
   sendto_opmask_butone(0, ircd_strncmp(reason, "AUTO", 4) ? SNO_GLINE :
-		       SNO_AUTO, "%s ajoute un %s global pour %s%s%s%s%s, expire à %Tu: %s",
+		       SNO_AUTO, "%s adding a global %s for %s%s%s%s%s, expiring at %Tu: %s",
 		       feature_bool(FEAT_HIS_SNOTICES) || IsServer(sptr) ?
 		       cli_name(sptr) : cli_name((cli_user(sptr))->server),
 		       flags & GLINE_BADCHAN ? "BADCHAN" : "GLINE",
@@ -477,7 +477,7 @@ if(!(flags & GLINE_LOCAL)) {
 		       expire + TSoffset, reason);
   if(feature_bool(FEAT_LOG_GESTION_MAIL) && feature_bool(FEAT_ALERTE_GLINE))
   {  	
-  ircd_snprintf(0, buf, sizeof buf, "%s ajoute un %s global pour %s%s%s%s%s, expire à %Tu: %s",
+  ircd_snprintf(0, buf, sizeof buf, "%s adding a global %s for %s%s%s%s%s, expiring at %Tu: %s",
                        feature_bool(FEAT_HIS_SNOTICES) || IsServer(sptr) ?
                        cli_name(sptr) : cli_name((cli_user(sptr))->server),
                        flags & GLINE_BADCHAN ? "BADCHAN" : "GLINE",
@@ -492,7 +492,7 @@ if(!(flags & GLINE_LOCAL)) {
 
 } else {
   sendto_allops(&me, ircd_strncmp(reason, "AUTO", 4) ? SNO_GLINE :
-		       SNO_AUTO, "%s ajoute sur %s un %s local pour %s%s%s%s%s, expire à %Tu: %s",
+		       SNO_AUTO, "%s adding to %s a local %s for %s%s%s%s%s, expiring at %Tu: %s",
 		       feature_bool(FEAT_HIS_SNOTICES) || IsServer(sptr) ?
 		       cli_name(sptr) : cli_name((cli_user(sptr))->server),
 			   cli_name(&me),
@@ -505,7 +505,7 @@ if(!(flags & GLINE_LOCAL)) {
 		       expire + TSoffset, reason);
   if(feature_bool(FEAT_LOG_GESTION_MAIL) && feature_bool(FEAT_ALERTE_GLINE))
   {
-  ircd_snprintf(0, buf, sizeof buf, "%s ajoute sur %s un %s local pour %s%s%s%s%s, expire à %Tu: %s",
+  ircd_snprintf(0, buf, sizeof buf, "%s adding to %s a local %s for %s%s%s%s%s, expiring at %Tu: %s",
                        feature_bool(FEAT_HIS_SNOTICES) || IsServer(sptr) ?
                        cli_name(sptr) : cli_name((cli_user(sptr))->server),
                            cli_name(&me),
@@ -570,7 +570,7 @@ gline_activate(struct Client *cptr, struct Client *sptr, struct Gline *gline,
     return 0; /* was active to begin with */
 
   /* Inform ops and log it */
-  sendto_opmask_butone(0, SNO_GLINE, "%s active un %s global pour %s%s%s%s%s, "
+  sendto_opmask_butone(0, SNO_GLINE, "%s activating global %s for %s%s%s%s%s, "
 		       "expire à %Tu: %s",
 		       feature_bool(FEAT_HIS_SNOTICES) || IsServer(sptr) ?
 		       cli_name(sptr) : cli_name((cli_user(sptr))->server),
@@ -582,7 +582,7 @@ gline_activate(struct Client *cptr, struct Client *sptr, struct Gline *gline,
 		       gline->gl_expire + TSoffset, gline->gl_reason);
   if(feature_bool(FEAT_LOG_GESTION_MAIL) && feature_bool(FEAT_ALERTE_GLINE))
   {
-  ircd_snprintf(0, buf, sizeof buf, "%s active un %s global pour %s%s%s%s%s, "
+  ircd_snprintf(0, buf, sizeof buf, "%s activating global %s for %s%s%s%s%s, "
                        "expire à %Tu: %s",
                        feature_bool(FEAT_HIS_SNOTICES) || IsServer(sptr) ?
                        cli_name(sptr) : cli_name((cli_user(sptr))->server),
@@ -647,7 +647,7 @@ gline_deactivate(struct Client *cptr, struct Client *sptr, struct Gline *gline,
 
   /* Inform ops and log it */
   if (!GlineIsLocal(gline)) { 
-  sendto_opmask_butone(0, SNO_GLINE, "%s supprime un %s global pour %s%s%s%s%s, expire à %Tu: "
+  sendto_opmask_butone(0, SNO_GLINE, "%s removing a global %s for %s%s%s%s%s, expiring at %Tu: "
 		       "%s",
 		       feature_bool(FEAT_HIS_SNOTICES) || IsServer(sptr) ?
 		       cli_name(sptr) : cli_name((cli_user(sptr))->server),
@@ -660,7 +660,7 @@ gline_deactivate(struct Client *cptr, struct Client *sptr, struct Gline *gline,
 
   if(feature_bool(FEAT_LOG_GESTION_MAIL) && feature_bool(FEAT_ALERTE_GLINE))
   {
-  ircd_snprintf(0, buf, sizeof buf,  "%s supprime un %s global pour %s%s%s%s%s, expire à %Tu: "
+  ircd_snprintf(0, buf, sizeof buf,  "%s removing a global %s for %s%s%s%s%s, expiring at %Tu: "
                        "%s",
                        feature_bool(FEAT_HIS_SNOTICES) || IsServer(sptr) ?
                        cli_name(sptr) : cli_name((cli_user(sptr))->server),
@@ -674,7 +674,7 @@ gline_deactivate(struct Client *cptr, struct Client *sptr, struct Gline *gline,
   }
 
   } else {
-  sendto_allops(&me, SNO_GLINE, "%s supprime sur %s un %s local pour %s%s%s%s%s, expire à %Tu: "
+  sendto_allops(&me, SNO_GLINE, "%s removing to %s a local %s for %s%s%s%s%s, expiring at %Tu: "
 		       "%s",
 		       feature_bool(FEAT_HIS_SNOTICES) || IsServer(sptr) ?
 		       cli_name(sptr) : cli_name((cli_user(sptr))->server),
@@ -687,7 +687,7 @@ gline_deactivate(struct Client *cptr, struct Client *sptr, struct Gline *gline,
 
   if(feature_bool(FEAT_LOG_GESTION_MAIL) && feature_bool(FEAT_ALERTE_GLINE))
   {
-  ircd_snprintf(0, buf, sizeof buf, "%s supprime sur %s un %s local pour %s%s%s%s%s, expire à %Tu: "
+  ircd_snprintf(0, buf, sizeof buf, "%s removing to %s a local %s for %s%s%s%s%s, expiring at %Tu: "
                        "%s",
                        feature_bool(FEAT_HIS_SNOTICES) || IsServer(sptr) ?
                        cli_name(sptr) : cli_name((cli_user(sptr))->server),

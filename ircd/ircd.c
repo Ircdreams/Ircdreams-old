@@ -119,7 +119,7 @@ int running = 1;
  *--------------------------------------------------------------------------*/
 void server_die(const char* message) {
   /* log_write will send out message to both log file and as server notice */
-  log_write(LS_SYSTEM, L_CRIT, 0, "Fermeture du Serveur: %s", message);
+  log_write(LS_SYSTEM, L_CRIT, 0, "Server terminating: %s", message);
   flush_connections(0);
   close_connections(1);
   running = 0;
@@ -130,7 +130,7 @@ void server_die(const char* message) {
  *--------------------------------------------------------------------------*/
 void server_panic(const char* message) {
   /* inhibit sending server notice--we may be panicing due to low memory */
-  log_write(LS_SYSTEM, L_CRIT, LOG_NOSNOTICE, "Panique du Serveur: %s", message);
+  log_write(LS_SYSTEM, L_CRIT, LOG_NOSNOTICE, "Server panic: %s", message);
   flush_connections(0);
   log_close();
   close_connections(1);
@@ -144,12 +144,12 @@ void server_restart(const char* message) {
   static int restarting = 0;
 
   /* inhibit sending any server notices; we may be in a loop */
-  log_write(LS_SYSTEM, L_WARNING, LOG_NOSNOTICE, "Redémarrage du Serveur: %s",
+  log_write(LS_SYSTEM, L_WARNING, LOG_NOSNOTICE, "Restarting Server: %s",
 	    message);
   if (restarting++) /* increment restarting to prevent looping */
     return;
 
-  sendto_opmask_butone(0, SNO_OLDSNO, "Redémarrage du serveur: %s", message);
+  sendto_opmask_butone(0, SNO_OLDSNO, "Restarting Server: %s", message);
   Debug((DEBUG_NOTICE, "Restarting server..."));
   flush_connections(0);
 
@@ -176,7 +176,7 @@ void server_restart(const char* message) {
  *--------------------------------------------------------------------------*/
 static void outofmemory(void) {
   Debug((DEBUG_FATAL, "Out of memory: restarting server..."));
-  server_restart("Manque de Mémoire");
+  server_restart("Out of Memory");
 } 
 
 
@@ -305,7 +305,7 @@ static void try_connections(struct Event* ev) {
     }
 
     if (connect_server(con_conf, 0, 0))
-       sendto_opmask_butone(0, SNO_OLDSNO, "Connexion avec %s activée.",
+       sendto_opmask_butone(0, SNO_OLDSNO, "Connection to %s activated.",
 			   con_conf->name);
   }
 
@@ -390,12 +390,12 @@ static void check_pings(struct Event* ev) {
          */
         if (*(cli_name(cptr)) && cli_user(cptr) && *(cli_user(cptr))->username) {
 	  send_reply(cptr, SND_EXPLICIT | ERR_BADPING,
-		   ":Votre logiciel n'est pas compatible avec ce serveur.");
+		   ":Your client may not be compatible with this server..");
 	  send_reply(cptr, SND_EXPLICIT | ERR_BADPING,
-		   ":La liste des logiciels compatibles sont disponible sur %s",
+		   ":ompatible clients are available at %s",
 		   feature_str(FEAT_URL_CLIENTS));
         }
-        exit_client_msg(cptr,cptr,&me, "Temps d'enregistrement dépassé");
+        exit_client_msg(cptr,cptr,&me, "Registration Timeout");
         continue;
       } else {
          /* OK, they still have enough time left, so we'll just skip to the
@@ -412,10 +412,10 @@ static void check_pings(struct Event* ev) {
        /* If it was a server, then tell ops about it. */
        if (IsServer(cptr) || IsConnecting(cptr) || IsHandshake(cptr))
          sendto_opmask_butone(0, SNO_OLDSNO,
-                              "Pas de réponse de %s, fermeture du lien",
+                              "No response from %s, closing link",
                               cli_name(cptr));
 
-      exit_client_msg(cptr,cptr,&me, "Pas de réponse");
+      exit_client_msg(cptr,cptr,&me, "Ping timeout");
       continue;
     }
     
@@ -475,7 +475,7 @@ static void parse_command_line(int argc, char** argv) {
     case 'h':  ircd_strncpy(cli_name(&me), optarg, HOSTLEN); break;
     case 'v':
       printf("ircd %s\n", version);
-      printf("Moteurs d'événement: ");
+      printf("Event engines: ");
 #ifdef USE_KQUEUE
       printf("kqueue() ");
 #endif
@@ -487,7 +487,7 @@ static void parse_command_line(int argc, char** argv) {
 #else
       printf("select()");
 #endif
-      printf("\nCompilé pour un maximum de %d connexions.\n", MAXCONNECTIONS);
+      printf("\nCompiled for a maximum of %d connections.\n", MAXCONNECTIONS);
 
 
       exit(0);
@@ -503,8 +503,8 @@ static void parse_command_line(int argc, char** argv) {
       
     default:
       printf("Usage: ircd [-f config] [-h servername] [-x loglevel] [-ntv]\n");
-      printf("\n -n -t\t Ne détachez pas\n -v\t Affiche la version du programme\n\n");
-      printf("Serveur non démarré.\n");
+      printf("\n -n -t\t Don't detach\n -v\t display version\n\n");
+      printf("Server not started.\n");
       exit(1);
     }
 }
@@ -582,7 +582,7 @@ static void set_core_limit(void) {
 static int set_userid_if_needed(void) {
   if (getuid() == 0 || geteuid() == 0 ||
       getgid() == 0 || getegid() == 0) {
-    fprintf(stderr, "ERREUR:  Vous ne pouvez pas lancer ce serveur en super-utilisateur (root).\n");
+    fprintf(stderr, "ERROR:  This server will not run as superuser.\n");
     return 0;
   }
 
