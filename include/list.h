@@ -1,7 +1,6 @@
 /*
  * list.h
  *
- * $Id: list.h,v 1.1.1.1 2004/02/28 11:10:53 bugs Exp $
  */
 #ifndef INCLUDED_list_h
 #define INCLUDED_list_h
@@ -65,5 +64,6 @@ extern struct ConfItem *make_conf(void);
 extern void delist_conf(struct ConfItem *aconf);
 extern void free_conf(struct ConfItem *aconf);
 extern void send_listinfo(struct Client *cptr, char *name);
+extern void add_history(struct Client *cptr, int still_on);
 
 #endif /* INCLUDED_list_h */

@@ -20,7 +20,6 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: s_user.c,v 1.99 2006/03/29 17:31:48 bugs Exp $
  */
 #include "../config.h"
 
@@ -103,7 +102,7 @@ static int userCount = 0;
 #define SIZEOF_INT 4
 
 /* The number of bytes in a long.  */
-#define SIZEOF_LONG 4
+#define SIZEOF_LONG 8
 
 /* The number of bytes in a short.  */
 #define SIZEOF_SHORT 2
@@ -1643,7 +1642,7 @@ int set_user_mode(struct Client *cptr, struct Client *sptr, int parc, char *parv
   int is_svsmode = 0;
   int do_set_host = 0;
 
-  if (MyUser(sptr) && (((int)cptr) == MAGIC_SVSMODE_OVERRIDE))
+  if (MyUser(sptr) && (((intptr_t)cptr) == MAGIC_SVSMODE_OVERRIDE))
   {
     is_svsmode = 1;
     cptr = sptr;

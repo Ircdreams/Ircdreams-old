@@ -1,7 +1,6 @@
 /*
  * ircd.h
  *
- * $Id: ircd.h,v 1.2 2004/12/16 01:06:41 bugs Exp $
  */
 #define DEBUGMODE
 #ifndef INCLUDED_ircd_h
@@ -61,7 +60,7 @@ extern time_t         nextping;
 extern char*          configfile;
 extern int            debuglevel;
 extern char*          debugmode;
-extern int	      running;
+extern int            running;
 
 #endif /* INCLUDED_ircd_h */
 

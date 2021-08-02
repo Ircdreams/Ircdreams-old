@@ -20,7 +20,6 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: m_nick.c,v 1.9 2005/06/29 17:08:00 bugs Exp $
  */
 
 /*
@@ -159,7 +158,7 @@ int m_nick(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   client_name = (*(cli_name(sptr))) ? cli_name(sptr) : "*";
 
   if (ircd_strcmp(client_name, "*") != 0) 
-    if ((parv[0] != '\0') && shun_lookup(sptr, 0)) 
+    if ((*parv[0] != '\0') && shun_lookup(sptr, 0))
       return 0; 
 
   if (parc < 2) {

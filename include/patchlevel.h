@@ -15,8 +15,6 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: patchlevel.h,v 1.143 2006/03/20 16:08:16 bugs Exp $
- *
  */
 #define PATCHLEVEL "1"
 
