@@ -148,7 +148,7 @@ enum Priv {
 #define _PRIV_NBITS		(8 * sizeof(unsigned long))
 
 #define _PRIV_IDX(priv)		((priv) / _PRIV_NBITS)
-#define _PRIV_BIT(priv)		(1 << ((priv) % _PRIV_NBITS))
+#define _PRIV_BIT(priv)		(1UL << ((priv) % _PRIV_NBITS))
 
 struct Privs {
   unsigned long priv_mask[(PRIV_LAST_PRIV + _PRIV_NBITS - 1) / _PRIV_NBITS];
@@ -226,7 +226,7 @@ struct Connection {
   int                 con_fd;    /* >= 0, for local clients */
   int                 con_freeflag; /* indicates if connection can be freed */
   int                 con_error; /* last socket level error for client */
-  int		      con_sentalong; /**< sentalong marker for connection */
+  int		          con_sentalong; /**< sentalong marker for connection */
   unsigned int        con_snomask; /* mask for server messages */
   time_t              con_nextnick; /* Next time a nick change is allowed */
   time_t              con_nexttarget;/* Next time a target change is allowed */
@@ -242,24 +242,18 @@ struct Connection {
   struct Listener*    con_listener; /* listening client which we accepted
 				       from */
   struct SLink*       con_confs; /* Configuration record associated */
-  HandlerType         con_handler; /* message index into command table
-				      for parsing */
-  struct DNSReply*    con_dns_reply; /* DNS reply used during client
-					registration */
+  HandlerType         con_handler; /* message index into command table for parsing */
+  struct DNSReply*    con_dns_reply; /* DNS reply used during client registration */
   struct ListingArgs* con_listing;
   unsigned int        con_max_sendq; /* cached max send queue for client */
-  unsigned int        con_ping_freq; /* cached ping freq from client conf
-					class */
+  unsigned int        con_ping_freq; /* cached ping freq from client conf class */
   unsigned short      con_lastsq; /* # 2k blocks when sendqueued called last */
   unsigned short      con_port;  /* and the remote port# too :-) */
-  unsigned char       con_targets[MAXTARGETS]; /* Hash values of current
-						  targets */
+  unsigned char       con_targets[MAXTARGETS]; /* Hash values of current targets */
   char con_sock_ip[SOCKIPLEN + 1]; /* this is the ip address as a string */
-  char con_sockhost[HOSTLEN + 1]; /* This is the host name from the socket and
-				    after which the connection was accepted. */
+  char con_sockhost[HOSTLEN + 1]; /* This is the host name from the socket and after which the connection was accepted. */
   char con_passwd[PASSWDLEN + 1];
-  char con_buffer[BUFSIZE];     /* Incoming message buffer; or the error that
-                                   caused this clients socket to be `dead' */
+  char con_buffer[BUFSIZE];     /* Incoming message buffer; or the error that caused this clients socket to be `dead' */
   struct Socket       con_socket; /* socket descriptor for client */
   struct Timer        con_proc; /* process latent messages from client */
   struct AuthRequest* con_auth; /* auth request for client */
@@ -320,7 +314,7 @@ struct Client {
 #define cli_marker(cli)		((cli)->cli_marker)
 #define cli_flags(cli)		((cli)->cli_flags)
 #define cli_hopcount(cli)	((cli)->cli_hopcount)
-#define cli_ip(cli)		((cli)->cli_ip)
+#define cli_ip(cli)		    ((cli)->cli_ip)
 #define cli_status(cli)		((cli)->cli_status)
 #define cli_local(cli)		((cli)->cli_local)
 #define cli_privs(cli)		((cli)->cli_privs)
@@ -330,7 +324,7 @@ struct Client {
 #define cli_oflags(cli)		((cli)->cli_oflags)
 
 #define cli_count(cli)		((cli)->cli_connect->con_count)
-#define cli_fd(cli)		((cli)->cli_connect->con_fd)
+#define cli_fd(cli)		    ((cli)->cli_connect->con_fd)
 #define cli_freeflag(cli)	((cli)->cli_connect->con_freeflag)
 #define cli_error(cli)		((cli)->cli_connect->con_error)
 #define cli_snomask(cli)	((cli)->cli_connect->con_snomask)
@@ -358,7 +352,7 @@ struct Client {
 #define cli_sock_ip(cli)	((cli)->cli_connect->con_sock_ip)
 #define cli_sockhost(cli)	((cli)->cli_connect->con_sockhost)
 #define cli_passwd(cli)		((cli)->cli_connect->con_passwd)
-#define cli_sentalong(cli)      ((cli)->cli_connect->con_sentalong)
+#define cli_sentalong(cli)  ((cli)->cli_connect->con_sentalong)
 #define cli_buffer(cli)		((cli)->cli_connect->con_buffer)
 #define cli_socket(cli)		((cli)->cli_connect->con_socket)
 #define cli_proc(cli)		((cli)->cli_connect->con_proc)
@@ -370,10 +364,10 @@ struct Client {
 #define con_prev_p(con)		((con)->con_prev_p)
 #define con_client(con)		((con)->con_client)
 #define con_count(con)		((con)->con_count)
-#define con_fd(con)		((con)->con_fd)
+#define con_fd(con)		    ((con)->con_fd)
 #define con_freeflag(con)	((con)->con_freeflag)
 #define con_error(con)		((con)->con_error)
-#define con_sentalong(con)      ((con)->con_sentalong)
+#define con_sentalong(con)  ((con)->con_sentalong)
 #define con_snomask(con)	((con)->con_snomask)
 #define con_nextnick(con)	((con)->con_nextnick)
 #define con_nexttarget(con)	((con)->con_nexttarget)
@@ -420,17 +414,13 @@ struct Client {
 #define IsConnecting(x)         (cli_status(x) == STAT_CONNECTING)
 #define IsHandshake(x)          (cli_status(x) == STAT_HANDSHAKE)
 #define IsMe(x)                 (cli_status(x) == STAT_ME)
-#define IsUnknown(x)            (cli_status(x) & \
-        (STAT_UNKNOWN | STAT_UNKNOWN_USER | STAT_UNKNOWN_SERVER))
+#define IsUnknown(x)            (cli_status(x) & (STAT_UNKNOWN | STAT_UNKNOWN_USER | STAT_UNKNOWN_SERVER))
 
 #define IsServerPort(x)         (cli_status(x) == STAT_UNKNOWN_SERVER )
 #define IsUserPort(x)           (cli_status(x) == STAT_UNKNOWN_USER )
-#define IsClient(x)             (cli_status(x) & \
-        (STAT_HANDSHAKE | STAT_ME | STAT_UNKNOWN |\
-         STAT_UNKNOWN_USER | STAT_UNKNOWN_SERVER | STAT_SERVER | STAT_USER))
+#define IsClient(x)             (cli_status(x) & (STAT_HANDSHAKE | STAT_ME | STAT_UNKNOWN | STAT_UNKNOWN_USER | STAT_UNKNOWN_SERVER | STAT_SERVER | STAT_USER))
 
-#define IsTrusted(x)            (cli_status(x) & \
-        (STAT_CONNECTING | STAT_HANDSHAKE | STAT_ME | STAT_SERVER))
+#define IsTrusted(x)            (cli_status(x) & (STAT_CONNECTING | STAT_HANDSHAKE | STAT_ME | STAT_SERVER))
 
 #define IsServer(x)             (cli_status(x) == STAT_SERVER)
 #define IsUser(x)               (cli_status(x) == STAT_USER)
@@ -447,18 +437,14 @@ struct Client {
 #define MyOper(x)       (MyConnect(x) && IsOper(x))
 #define Protocol(x)     ((cli_serv(x))->prot)
 
-#define PARSE_AS_SERVER(x) (cli_status(x) & \
-            (STAT_SERVER | STAT_CONNECTING | STAT_HANDSHAKE))
+#define PARSE_AS_SERVER(x) (cli_status(x) & (STAT_SERVER | STAT_CONNECTING | STAT_HANDSHAKE))
 
 /*
  * flags macros.
  */
-#define FlagSet(fset, flag)     ((fset)->flag_bits[_PRIV_IDX(flag)] |= \
-                                 _PRIV_BIT(flag))
-#define FlagClr(fset, flag)     ((fset)->flag_bits[_PRIV_IDX(flag)] &= \
-                                 ~(_PRIV_BIT(flag)))
-#define FlagHas(fset, flag)     ((fset)->flag_bits[_PRIV_IDX(flag)] & \
-                                 _PRIV_BIT(flag))
+#define FlagSet(fset, flag)     ((fset)->flag_bits[_PRIV_IDX(flag)] |= _PRIV_BIT(flag))
+#define FlagClr(fset, flag)     ((fset)->flag_bits[_PRIV_IDX(flag)] &= ~(_PRIV_BIT(flag)))
+#define FlagHas(fset, flag)     ((fset)->flag_bits[_PRIV_IDX(flag)] & _PRIV_BIT(flag))
 #define SetFlag(cli, flag)      FlagSet(&cli_flags(cli), flag)
 #define ClrFlag(cli, flag)      FlagClr(&cli_flags(cli), flag)
 #define HasFlag(cli, flag)      FlagHas(&cli_flags(cli), flag)
@@ -486,26 +472,26 @@ struct Client {
 #define IsHub(x)                HasFlag(x, FLAG_HUB)
 #define IsService(x)            HasFlag(x, FLAG_SERVICE)
 #define IsAccount(x)            HasFlag(x, FLAG_ACCOUNT)
-#define IsHiddenHost(x)		HasFlag(x, FLAG_HIDDENHOST)
-#define HasHiddenHost(x)	(IsAccount(x) && IsHiddenHost(x))
+#define IsHiddenHost(x)		    HasFlag(x, FLAG_HIDDENHOST)
+#define HasHiddenHost(x)	    (IsAccount(x) && IsHiddenHost(x))
 /*#define HasHiddenHost(x)	(cli_user(x)->crypt != cli_user(x)->host)*/
-#define IsMale(x)		HasFlag(x, FLAG_MALE)
-#define IsFemale(x)		HasFlag(x, FLAG_FEMALE)
-#define IsAnAdmin(x)		HasFlag(x, FLAG_ADMIN)
-#define WantRestart(x)		HasFlag(x, FLAG_WANTRESTART)
-#define IsProtect(x)		HasFlag(x, FLAG_PROTECT)
-#define IsSetHost(x)		HasFlag(x, FLAG_SETHOST)
-#define IsNoPrivate(x)		HasFlag(x, FLAG_NOPRIVATE)
-#define IsHelper(x)		HasFlag(x, FLAG_HELPER)
-#define IsPAccOnly(x)		HasFlag(x, FLAG_PACCONLY)
-#define IsNoIdle(x)		HasFlag(x, FLAG_NOIDLE)
-#define IsNoChan(x)		HasFlag(x, FLAG_NOCHAN)
-#define IsWhois(x)		HasFlag(x, FLAG_WHOIS)
-#define HasVHost(x)		HasFlag(x, FLAG_VHOST)
+#define IsMale(x)		        HasFlag(x, FLAG_MALE)
+#define IsFemale(x)		        HasFlag(x, FLAG_FEMALE)
+#define IsAnAdmin(x)		    HasFlag(x, FLAG_ADMIN)
+#define WantRestart(x)		    HasFlag(x, FLAG_WANTRESTART)
+#define IsProtect(x)		    HasFlag(x, FLAG_PROTECT)
+#define IsSetHost(x)		    HasFlag(x, FLAG_SETHOST)
+#define IsNoPrivate(x)		    HasFlag(x, FLAG_NOPRIVATE)
+#define IsHelper(x)		        HasFlag(x, FLAG_HELPER)
+#define IsPAccOnly(x)		    HasFlag(x, FLAG_PACCONLY)
+#define IsNoIdle(x)		        HasFlag(x, FLAG_NOIDLE)
+#define IsNoChan(x)		        HasFlag(x, FLAG_NOCHAN)
+#define IsWhois(x)		        HasFlag(x, FLAG_WHOIS)
+#define HasVHost(x)		        HasFlag(x, FLAG_VHOST)
 #define IsSSL(x)                HasFlag(x, FLAG_SSL)
 #define IsPrivileged(x)         (IsAnOper(x) || IsServer(x))
-#define IsHiding(x)		HasFlag(x, FLAG_HIDE)
-#define IsHideOper(x)		HasFlag(x, FLAG_HIDEOPER)
+#define IsHiding(x)		        HasFlag(x, FLAG_HIDE)
+#define IsHideOper(x)		    HasFlag(x, FLAG_HIDEOPER)
 
 #define SetAccess(x)            SetFlag(x, FLAG_CHKACCESS)
 #define SetBurst(x)             SetFlag(x, FLAG_BURST)
@@ -524,23 +510,23 @@ struct Client {
 #define SetHub(x)               SetFlag(x, FLAG_HUB)
 #define SetService(x)           SetFlag(x, FLAG_SERVICE)
 #define SetAccount(x)           SetFlag(x, FLAG_ACCOUNT)
-#define SetHiddenHost(x)	SetFlag(x, FLAG_HIDDENHOST)
-#define SetFemale(x)		SetFlag(x, FLAG_FEMALE)
-#define SetMale(x)		SetFlag(x, FLAG_MALE)
-#define SetAdmin(x)		SetFlag(x, FLAG_ADMIN)
-#define SetWantRestart(x)	SetFlag(x, FLAG_WANTRESTART)
-#define SetProtect(x)		SetFlag(x, FLAG_PROTECT)
-#define SetSetHost(x)		SetFlag(x, FLAG_SETHOST)
-#define SetNoPrivate(x)		SetFlag(x, FLAG_NOPRIVATE)
-#define SetHelper(x)		SetFlag(x, FLAG_HELPER)
-#define SetPAccOnly(x)		SetFlag(x, FLAG_PACCONLY)
-#define SetNoIdle(x)		SetFlag(x, FLAG_NOIDLE)
-#define SetNoChan(x)		SetFlag(x, FLAG_NOCHAN)
-#define SetWhois(x)		SetFlag(x, FLAG_WHOIS)
+#define SetHiddenHost(x)	    SetFlag(x, FLAG_HIDDENHOST)
+#define SetFemale(x)		    SetFlag(x, FLAG_FEMALE)
+#define SetMale(x)		        SetFlag(x, FLAG_MALE)
+#define SetAdmin(x)		        SetFlag(x, FLAG_ADMIN)
+#define SetWantRestart(x)	    SetFlag(x, FLAG_WANTRESTART)
+#define SetProtect(x)		    SetFlag(x, FLAG_PROTECT)
+#define SetSetHost(x)		    SetFlag(x, FLAG_SETHOST)
+#define SetNoPrivate(x)		    SetFlag(x, FLAG_NOPRIVATE)
+#define SetHelper(x)		    SetFlag(x, FLAG_HELPER)
+#define SetPAccOnly(x)		    SetFlag(x, FLAG_PACCONLY)
+#define SetNoIdle(x)		    SetFlag(x, FLAG_NOIDLE)
+#define SetNoChan(x)		    SetFlag(x, FLAG_NOCHAN)
+#define SetWhois(x)		        SetFlag(x, FLAG_WHOIS)
 #define SetVHost(x)             SetFlag(x, FLAG_VHOST)
 #define SetSSL(x)               SetFlag(x, FLAG_SSL)
-#define SetHide(x)		SetFlag(x, FLAG_HIDE)
-#define SetHideOper(x)		SetFlag(x, FLAG_HIDEOPER)
+#define SetHide(x)		        SetFlag(x, FLAG_HIDE)
+#define SetHideOper(x)		    SetFlag(x, FLAG_HIDEOPER)
 
 #define ClearAccess(x)          ClrFlag(x, FLAG_CHKACCESS)
 #define ClearBurst(x)           ClrFlag(x, FLAG_BURST)
@@ -554,23 +540,23 @@ struct Client {
 #define ClearUPing(x)           ClrFlag(x, FLAG_UPING)
 #define ClearWallops(x)         ClrFlag(x, FLAG_WALLOP)
 #define ClearServNotice(x)      ClrFlag(x, FLAG_SERVNOTICE)
-#define ClearHiddenHost(x)	ClrFlag(x, FLAG_HIDDENHOST)
-#define ClearFemale(x)		ClrFlag(x, FLAG_FEMALE)
-#define ClearMale(x)		ClrFlag(x, FLAG_MALE)
-#define ClearAdmin(x)		ClrFlag(x, FLAG_ADMIN)
-#define ClearWantRestart(x)	ClrFlag(x, FLAG_WANTRESTART)
-#define ClearProtect(x)		ClrFlag(x, FLAG_PROTECT)
-#define ClearSetHost(x)		ClrFlag(x, FLAG_SETHOST)
-#define ClearNoPrivate(x)	ClrFlag(x, FLAG_NOPRIVATE)
-#define ClearHelper(x)		ClrFlag(x, FLAG_HELPER)
-#define ClearPAccOnly(x)	ClrFlag(x, FLAG_PACCONLY)
-#define ClearNoIdle(x)		ClrFlag(x, FLAG_NOIDLE)
-#define ClearNoChan(x)		ClrFlag(x, FLAG_NOCHAN)
-#define ClearWhois(x)		ClrFlag(x, FLAG_WHOIS)
+#define ClearHiddenHost(x)	    ClrFlag(x, FLAG_HIDDENHOST)
+#define ClearFemale(x)		    ClrFlag(x, FLAG_FEMALE)
+#define ClearMale(x)		    ClrFlag(x, FLAG_MALE)
+#define ClearAdmin(x)		    ClrFlag(x, FLAG_ADMIN)
+#define ClearWantRestart(x)	    ClrFlag(x, FLAG_WANTRESTART)
+#define ClearProtect(x)		    ClrFlag(x, FLAG_PROTECT)
+#define ClearSetHost(x)		    ClrFlag(x, FLAG_SETHOST)
+#define ClearNoPrivate(x)	    ClrFlag(x, FLAG_NOPRIVATE)
+#define ClearHelper(x)		    ClrFlag(x, FLAG_HELPER)
+#define ClearPAccOnly(x)	    ClrFlag(x, FLAG_PACCONLY)
+#define ClearNoIdle(x)		    ClrFlag(x, FLAG_NOIDLE)
+#define ClearNoChan(x)		    ClrFlag(x, FLAG_NOCHAN)
+#define ClearWhois(x)		    ClrFlag(x, FLAG_WHOIS)
 #define ClearVHost(x)           ClrFlag(x, FLAG_VHOST)
 #define ClearSSL(x)             ClrFlag(x, FLAG_SSL)
-#define ClearHide(x)		ClrFlag(x, FLAG_HIDE)
-#define ClearHideOper(x)	ClrFlag(x, FLAG_HIDEOPER)
+#define ClearHide(x)		    ClrFlag(x, FLAG_HIDE)
+#define ClearHideOper(x)	    ClrFlag(x, FLAG_HIDEOPER)
 
 /* free flags */
 #define FREEFLAG_SOCKET	0x0001	/* socket needs to be freed */
@@ -610,21 +596,18 @@ struct Client {
 
 #define SNO_USER        (SNO_ALL & ~SNO_OPER)
 
-#define SNO_DEFAULT (SNO_NETWORK|SNO_OPERKILL|SNO_GLINE)
+#define SNO_DEFAULT     (SNO_NETWORK|SNO_OPERKILL|SNO_GLINE)
 #define SNO_OPERDEFAULT (SNO_DEFAULT|SNO_HACK2|SNO_HACK4|SNO_THROTTLE|SNO_OLDSNO)
-#define SNO_OPER (SNO_CONNEXIT|SNO_OLDREALOP)
-#define SNO_NOISY (SNO_SERVKILL|SNO_UNAUTH)
+#define SNO_OPER        (SNO_CONNEXIT|SNO_OLDREALOP)
+#define SNO_NOISY       (SNO_SERVKILL|SNO_UNAUTH)
 
-#define PrivSet(pset, priv)	((pset)->priv_mask[_PRIV_IDX(priv)] |= \
-				 _PRIV_BIT(priv))
-#define PrivClr(pset, priv)	((pset)->priv_mask[_PRIV_IDX(priv)] &= \
-				 ~(_PRIV_BIT(priv)))
-#define PrivHas(pset, priv)	((pset)->priv_mask[_PRIV_IDX(priv)] & \
-				 _PRIV_BIT(priv))
+#define PrivSet(pset, priv)	((pset)->priv_mask[_PRIV_IDX(priv)] |= _PRIV_BIT(priv))
+#define PrivClr(pset, priv)	((pset)->priv_mask[_PRIV_IDX(priv)] &= ~(_PRIV_BIT(priv)))
+#define PrivHas(pset, priv)	((pset)->priv_mask[_PRIV_IDX(priv)] & _PRIV_BIT(priv))
 
 #define GrantPriv(cli, priv)	(PrivSet(&(cli_privs(cli)), priv))
 #define RevokePriv(cli, priv)	(PrivClr(&(cli_privs(cli)), priv))
-#define HasPriv(cli, priv)	(PrivHas(&(cli_privs(cli)), priv))
+#define HasPriv(cli, priv)	    (PrivHas(&(cli_privs(cli)), priv))
 
 typedef enum ShowIPType {
   HIDE_IP,
