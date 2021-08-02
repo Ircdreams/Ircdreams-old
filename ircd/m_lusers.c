@@ -126,9 +126,10 @@ int m_lusers(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   send_reply(sptr, RPL_CURRENT_LOCAL, UserStats.local_clients, UserStats.localclients);
   send_reply(sptr, RPL_CURRENT_GLOBAL,  UserStats.clients, UserStats.globalclients);
 
-  sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Maximum de connexion reçues: "
-		"%d (%d clients) (%d connexions reçues au total depuis le %s)", sptr, max_connection_count,
+  sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Highest connection count: "
+		"%d (%d clients) (%d connections received since %s)", sptr, max_connection_count,
 		max_client_count, UserStats.conncount, date(cli_firsttime(&me))); 
+		
   return 0;
 }
 
@@ -161,8 +162,8 @@ int ms_lusers(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   send_reply(sptr, RPL_CURRENT_LOCAL, UserStats.local_clients, UserStats.localclients);
   send_reply(sptr, RPL_CURRENT_GLOBAL, UserStats.clients, UserStats.globalclients);
 
-  sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Maximum de connexion reçues: "
-		"%d (%d clients) (%d connexions reçues au total depuis le %s)", sptr, max_connection_count,
+  sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Highest connection count: "
+		"%d (%d clients) (%d connections received since %s)", sptr, max_connection_count,
 		max_client_count, UserStats.conncount, date(cli_firsttime(&me)));
   return 0;
 }
