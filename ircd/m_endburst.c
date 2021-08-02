@@ -114,7 +114,7 @@ int ms_end_of_burst(struct Client* cptr, struct Client* sptr, int parc, char* pa
   assert(0 != cptr);
   assert(0 != sptr);
 
-  sendto_opmask_butone(0, SNO_NETWORK, "net.burst complété depuis %C.",
+  sendto_opmask_butone(0, SNO_NETWORK, "Completed net.burst from %C.",
   	sptr);
   sendcmdto_serv_butone(sptr, CMD_END_OF_BURST, cptr, "");
   ClearBurst(sptr);
@@ -128,7 +128,7 @@ int ms_end_of_burst(struct Client* cptr, struct Client* sptr, int parc, char* pa
 
     if (!chan->members) { /* empty channel */
       if (!(chan->mode.mode & MODE_BURSTADDED))
-	sendto_opmask_butone(0, SNO_OLDSNO, "Canal vide %H non ajouté par le "
+	sendto_opmask_butone(0, SNO_OLDSNO, "Empty channel %H not added by "
 			     "BURST!", chan);
 
       sub1_from_channel(chan); /* ok, nuke channel now */
@@ -153,7 +153,7 @@ int ms_end_of_burst_ack(struct Client *cptr, struct Client *sptr, int parc, char
   if (!IsServer(sptr))
     return 0;
 
-  sendto_opmask_butone(0, SNO_NETWORK, "%C a répondu à la fin du net.burst.",
+  sendto_opmask_butone(0, SNO_NETWORK, "%C acknowledged end of net.burst.",
 		       sptr);
   sendcmdto_serv_butone(sptr, CMD_END_OF_BURST_ACK, cptr, "");
   ClearBurstAck(sptr);
