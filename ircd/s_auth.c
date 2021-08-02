@@ -16,8 +16,6 @@
  *   along with this program; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- *   $Id: s_auth.c,v 1.8 2005/11/28 01:53:31 bugs Exp $
- *
  * Changes:
  *   July 6, 1999 - Rewrote most of the code here. When a client connects
  *     to the server and passes initial socket validation checks, it
@@ -76,15 +74,16 @@ static struct {
   unsigned int length;
 } HeaderMessages [] = {
   /* 123456789012345678901234567890123456789012345678901234567890 */
-  { "NOTICE AUTH :*** Recherche de votre hostname\r\n",                                      46 },
-  { "NOTICE AUTH :*** Découverte de votre hostname\r\n",                                     47 },
-  { "NOTICE AUTH :*** Découverte de votre hostname, caché\r\n",                              54 },
-  { "NOTICE AUTH :*** Impossible de trouver votre hostname\r\n",                             55 },
-  { "NOTICE AUTH :*** Vérification de votre identifiant\r\n",                                52 },
-  { "NOTICE AUTH :*** Réponse obtenue pour votre identifiant\r\n",                           57 },
-  { "NOTICE AUTH :*** Aucune réponse pour votre identifiant\r\n",                            56 },
-  { "NOTICE AUTH :*** Votre DNS et REVERSE DNS ne concorde pas, ignore votre hostname.\r\n", 83 },
-  { "NOTICE AUTH :*** Hostname invalide\r\n",                                                36 }
+  { "NOTICE AUTH :*** Looking up your hostname\r\n",       43 },
+  { "NOTICE AUTH :*** Found your hostname\r\n",            38 },
+  { "NOTICE AUTH :*** Found your hostname, cached\r\n",    46 },
+  { "NOTICE AUTH :*** Couldn't look up your hostname\r\n", 49 },
+  { "NOTICE AUTH :*** Checking Ident\r\n",                 33 },
+  { "NOTICE AUTH :*** Got ident response\r\n",             37 },
+  { "NOTICE AUTH :*** No ident response\r\n",              36 },
+  { "NOTICE AUTH :*** Your forward and reverse DNS do not match, " \
+    "ignoring hostname.\r\n",                              80 },
+  { "NOTICE AUTH :*** Invalid hostname\r\n",               35 }
 };
 
 typedef enum {

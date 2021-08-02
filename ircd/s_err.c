@@ -16,7 +16,6 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: s_err.c,v 1.64 2006/01/25 16:35:34 bugs Exp $
  */
 #include "../config.h"
 
@@ -30,15 +29,15 @@ static Numeric replyTable[] = {
 /* 000 */
   { 0 },
 /* 001 */
-  { RPL_WELCOME, ":Bienvenue sur le réseau de discussion %s%s%s, %s", "001" },
+  { RPL_WELCOME, ":Welcome to the %s IRC Network%s%s, %s", "001" },
 /* 002 */
-  { RPL_YOURHOST, ":Le serveur est %s, version %s", "002" },
+  { RPL_YOURHOST, ":Your host is %s, running version %s", "002" },
 /* 003 */
-  { RPL_CREATED, ":Ce server a été créé le %s", "003" },
+  { RPL_CREATED, ":This server was created %s", "003" },
 /* 004 */
   { RPL_MYINFO, "%s %s acdfghikorswxACDHIOPRWXZ bcdhiklmnopqrstvCDMNOPRTW bklohv" , "004" },
 /* 005 */
-  { RPL_ISUPPORT, "%s :sont supportés par le serveur.", "005" },
+  { RPL_ISUPPORT, "%s :are supported by this server", "005" },
 /* 006 */
   { 0 },
 /* 007 */
@@ -66,7 +65,7 @@ static Numeric replyTable[] = {
 /* 016 */
   { RPL_MAPMORE, ":%s%s --> *more*", "016" },
 /* 017 */
-  { RPL_MAPEND, ":Fin du /MAP", "017" },
+  { RPL_MAPEND, ":End of /MAP", "017" },
 /* 018 */
   { 0 },
 /* 019 */
@@ -470,7 +469,7 @@ static Numeric replyTable[] = {
 /* 218 */
   { RPL_STATSYLINE, "%c %d %d %d %d %ld %d", "218" },
 /* 219 */
-  { RPL_ENDOFSTATS, "%c :Fin du /STATS", "219" },
+  { RPL_ENDOFSTATS, "%s :End of /STATS report", "219" },
 /* 220 */
   { 0 },
 /* 221 */
@@ -506,7 +505,7 @@ static Numeric replyTable[] = {
 /* 236 */
   { RPL_STATSVERBOSE, "V :Sent as explicit", "236" },
 /* 237 */
-  { RPL_STATSENGINE, "%s :Moteur réseau", "237" },
+  { RPL_STATSENGINE, "%s :Event loop engine", "237" },
 /* 238 */
   { RPL_STATSFLINE, "%c %s %s", "238" },
 /* 239 */
@@ -516,7 +515,7 @@ static Numeric replyTable[] = {
 /* 241 */
   { RPL_STATSLLINE, "%c %s * %s %d %d", "241" },
 /* 242 */
-  { RPL_STATSUPTIME, ":Serveur lancé depuis %d jours, %d:%02d:%02d", "242" },
+  { RPL_STATSUPTIME, ":Server Up %d days, %d:%02d:%02d", "242" },
 /* 243 */
   { RPL_STATSOLINE, "%c %s * %s %d %d", "243" },
 /* 244 */
@@ -532,19 +531,19 @@ static Numeric replyTable[] = {
 /* 249 */
   { RPL_STATSDEBUG, 0, "249" },
 /* 250 */
-  { RPL_STATSCONN, ":Maximum de connexion reçues: %d (%d clients)", "250" },
+  { RPL_STATSCONN, ":Highest connection count: %u (%u clients)", "250" },
 /* 251 */
-  { RPL_LUSERCLIENT, ":On trouve %d chatteur(s) dont %d invisible(s) sur %d serveur(s)", "251" },
+  { RPL_LUSERCLIENT, ":There are %u users and %u invisible on %u servers", "251" },
 /* 252 */
-  { RPL_LUSEROP, "%d :operateur(s) connecté(s)", "252" },
+  { RPL_LUSEROP, "%u :operator(s) online", "252" },
 /* 253 */
-  { RPL_LUSERUNKNOWN, "%d :connection(s) inconnue(s)", "253" },
+  { RPL_LUSERUNKNOWN, "%u :unknown connection(s)", "253" },
 /* 254 */
-  { RPL_LUSERCHANNELS, "%d :salons formés", "254" },
+  { RPL_LUSERCHANNELS, "%u :channels formed", "254" },
 /* 255 */
-  { RPL_LUSERME, ":Je possède %d client(s) et %d serveur(s)", "255" },
+  { RPL_LUSERME, ":I have %u clients and %u servers", "255" },
 /* 256 */
-  { RPL_ADMINME, ":Informations administratives à propos de %s", "256" },
+  { RPL_ADMINME, ":Administrative info about %s", "256" },
 /* 257 */
   { RPL_ADMINLOC1, ":%s", "257" },
 /* 258 */

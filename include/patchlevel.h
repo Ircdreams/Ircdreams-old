@@ -16,9 +16,9 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  */
-#define PATCHLEVEL "1"
+#define PATCHLEVEL "0-DEV"
 
-#define RELEASE ".25."
+#define RELEASE ".0."
 
 /*
  * Deliberate empty lines
@@ -26,7 +26,7 @@
 /* Do NOT edit those: */
 
 #ifndef BASE_VERSION
-#define BASE_VERSION "IrcDreams 2"
+#define BASE_VERSION "IrcDreams 3"
 #endif
 
 #ifndef MAJOR_PROTOCOL
