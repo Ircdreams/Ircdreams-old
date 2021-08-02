@@ -561,9 +561,9 @@ static Numeric replyTable[] = {
 /* 264 */
   { 0 },
 /* 265 */
-  { RPL_CURRENT_LOCAL, ":Nombre d'utilisateurs actuels local: %d Maximum: %d", "265" },
+  { RPL_CURRENT_LOCAL, ":Current local users: %d Maximum: %d", "265" },
 /* 266 */
-  { RPL_CURRENT_GLOBAL, ":Nombre d'utilisateurs actuels global: %d Maximum: %d", "266" },
+  { RPL_CURRENT_GLOBAL, ":Current global users: %d Maximum: %d", "266" },
 /* 267 */
   { 0 },
 /* 268 */
@@ -575,7 +575,7 @@ static Numeric replyTable[] = {
 /* 271 */
   { RPL_SILELIST, "%s %s", "271" },
 /* 272 */
-  { RPL_ENDOFSILELIST, "%s :Fin de la liste des Silences", "272" },
+  { RPL_ENDOFSILELIST, "%s :End of Silence List", "272" },
 /* 273 */
   { 0 },
 /* 274 */
@@ -593,11 +593,11 @@ static Numeric replyTable[] = {
 /* 280 */
   { RPL_GLIST, "%s%s%s%s%s %Tu %s %c :%s", "280" },
 /* 281 */
-  { RPL_ENDOFGLIST, ":Fin de la liste des G-Lines", "281" },
+  { RPL_ENDOFGLIST, ":End of G-line List", "281" },
 /* 282 */
   { RPL_JUPELIST, "%s %Tu %s %c :%s", "282" },
 /* 283 */
-  { RPL_ENDOFJUPELIST, ":Fin de la liste des Jupes", "283" },
+  { RPL_ENDOFJUPELIST, ":End of Jupe List", "283" },
 /* 284 */
   { RPL_FEATURE, 0, "284" },
 /* 285 */
@@ -641,9 +641,9 @@ static Numeric replyTable[] = {
 /* 304 */
   { RPL_TEXT, 0, "304" },
 /* 305 */
-  { RPL_UNAWAY, ":Vous êtes revenu%s de votre absence", "305" },
+  { RPL_UNAWAY, ":You are no longer marked as being away", "305" },
 /* 306 */
-  { RPL_NOWAWAY, ":Vous êtes désormais absent%s", "306" },
+  { RPL_NOWAWAY, ":You have been marked as being away", "306" },
 /* 307 */
   { 0 },
 /* 308 */
@@ -657,17 +657,17 @@ static Numeric replyTable[] = {
 /* 312 */
   { RPL_WHOISSERVER, "%s %s :%s", "312" },
 /* 313 */
-  { RPL_WHOISOPERATOR, "%s :est %s%s", "313" },
+  { RPL_WHOISOPERATOR, "%s :is %s%s", "313" },
 /* 314 */
   { RPL_WHOWASUSER, "%s %s %s * :%s", "314" },
 /* 315 */
-  { RPL_ENDOFWHO, "%s :Fin de la commande /WHO", "315" },
+  { RPL_ENDOFWHO, "%s :End of /WHO list.", "315" },
 /* 316 */
   { RPL_GODMODE, "%s :Mode dieu ACTIF ! (Mode +Z)", "316" },
 /* 317 */
-  { RPL_WHOISIDLE, "%s %ld %ld :secondes d'inactivités, date de connexion", "317" },
+  { RPL_WHOISIDLE, "%s %ld %ld :seconds idle, signon time", "317" },
 /* 318 */
-  { RPL_ENDOFWHOIS, "%s :Fin de la commande /WHOIS", "318" },
+  { RPL_ENDOFWHOIS, "%s :End of /WHOIS list.", "318" },
 /* 319 */
   { RPL_WHOISCHANNELS, "%s :%s", "319" },
 /* 320 */
@@ -677,7 +677,7 @@ static Numeric replyTable[] = {
 /* 322 */
   { RPL_LIST, "%s %d :%s", "322" },
 /* 323 */
-  { RPL_LISTEND, ":Fin de la commande /LIST", "323" },
+  { RPL_LISTEND, ":End of /LIST", "323" },
 /* 324 */
   { RPL_CHANNELMODEIS, "%s %s %s", "324" },
 /* 325 */
@@ -691,9 +691,9 @@ static Numeric replyTable[] = {
 /* 329 */
   { RPL_CREATIONTIME, "%s %Tu", "329" },
 /* 330 */
-  { RPL_WHOISACCOUNT, "%s %s :est identifié%s en tant que", "330" },
+  { RPL_WHOISACCOUNT, "%s %s :%s is logged in as", "330" },
 /* 331 */
-  { RPL_NOTOPIC, "%s :Aucun topic.", "331" },
+  { RPL_NOTOPIC, "%s :No topic is set.", "331" },
 /* 332 */
   { RPL_TOPIC, "%s :%s", "332" },
 /* 333 */
@@ -707,7 +707,7 @@ static Numeric replyTable[] = {
 /* 337 */
   { RPL_WHOISSSL, "%s :est connecté par SSL", "337" },
 /* 338 */
-  { RPL_WHOISACTUALLY, "%s %s@%s %s :User@host actuel, IP actuelle", "338" },
+  { RPL_WHOISACTUALLY, "%s %s@%s %s :Actual user@host, Actual IP", "338" },
 /* 339 */
   { 0 },
 /* 340 */
@@ -725,7 +725,7 @@ static Numeric replyTable[] = {
 /* 346 */
   { RPL_INVITELIST, ":%s", "346" },
 /* 347 */
-  { RPL_ENDOFINVITELIST, ":Fin de la liste des Invites", "347" },
+ { RPL_ENDOFINVITELIST, ":End of Invite List", "347" },
 /* 348 */
   { 0 },
 /* 349 */
@@ -755,21 +755,21 @@ static Numeric replyTable[] = {
 /* 361 */
   { RPL_KILLDONE, 0, "361" }, /* Not used */
 /* 362 */
-  { RPL_CLOSING, "%s :Fermeture par un Operateur", "362" },
+  { RPL_CLOSING, "%s :Operator enforced Close", "362" },
 /* 363 */
-  { RPL_CLOSEEND, "%d :Connexions fermées", "363" },
+  { RPL_CLOSEEND, "%d :Connections Closed", "363" },
 /* 364 */
   { RPL_LINKS, "%s %s :%d P%u %s", "364" },
 /* 365 */
-  { RPL_ENDOFLINKS, "%s :Fin de la liste /LINKS", "365" },
+  { RPL_ENDOFLINKS, "%s :End of /LINKS list.", "365" },
 /* 366 */
-  { RPL_ENDOFNAMES, "%s :Fin de la liste /NAMES", "366" },
+  { RPL_ENDOFNAMES, "%s :End of /NAMES list.", "366" },
 /* 367 */
   { RPL_BANLIST, "%s %s %s %Tu", "367" },
 /* 368 */
-  { RPL_ENDOFBANLIST, "%s :Fin de la banlist.", "368" },
+  { RPL_ENDOFBANLIST, "%s :End of Channel Ban List", "368" },
 /* 369 */
-  { RPL_ENDOFWHOWAS, "%s :Fin de la commande /WHOWAS", "369" },
+  { RPL_ENDOFWHOWAS, "%s :End of WHOWAS", "369" },
 /* 370 */
   { 0 },
 /* 371 */
@@ -777,13 +777,13 @@ static Numeric replyTable[] = {
 /* 372 */
   { RPL_MOTD, ":- %s", "372" },
 /* 373 */
-  { RPL_INFOSTART, ":Serveur INFO", "373" },
+  { RPL_INFOSTART, ":Server INFO", "373" },
 /* 374 */
-  { RPL_ENDOFINFO, ":Fin de la commande /INFO", "374" },
+  { RPL_ENDOFINFO, ":End of /INFO list.", "374" },
 /* 375 */
   { RPL_MOTDSTART, ":- %s Message of the Day - ", "375" },
 /* 376 */
-  { RPL_ENDOFMOTD, ":Fin de la commande /MOTD", "376" },
+  { RPL_ENDOFMOTD, ":End of /MOTD command.", "376" },
 /* 377 */
   { 0 },
 /* 378 */
@@ -793,13 +793,13 @@ static Numeric replyTable[] = {
 /* 380 */
   { 0 },
 /* 381 */
-  { RPL_YOUREOPER, ":Vous êtes %s", "381" },
+  { RPL_YOUREOPER, ":You are %s", "381" },
 /* 382 */
   { RPL_REHASHING, "%s :Rehashing", "382" },
 /* 383 */
   { 0 },
 /* 384 */
-  { RPL_MYPORTIS, "%d :Le port pour le serveur local est", "384" }, /* not used */
+  { RPL_MYPORTIS, "%d :Port to local server is", "384" }, /* not used */
 /* 385 */
   { RPL_NOTOPERANYMORE, 0, "385" }, /* not used */
 /* 386 */
@@ -823,7 +823,7 @@ static Numeric replyTable[] = {
 /* 395 */
   { 0 },
 /* 396 */
-  { RPL_HOSTHIDDEN, "%s.%s est maintenant votre hostname", "396" },
+  { RPL_HOSTHIDDEN, "%s.%s is now your hostname", "396" },
 /* 397 */
   { RPL_SVSHOST, "%s est maintenant votre hostname", "397" },
 /* 398 */
@@ -833,37 +833,37 @@ static Numeric replyTable[] = {
 /* 400 */
   { ERR_FIRSTERROR, "", "400" },
 /* 401 */
-  { ERR_NOSUCHNICK, "%s :Ce pseudonyme n'existe pas", "401" },
+  { ERR_NOSUCHNICK, "%s :No such nick", "401" },
 /* 402 */
-  { ERR_NOSUCHSERVER, "%s :Ce serveur n'existe pas", "402" },
+  { ERR_NOSUCHSERVER, "%s :No such server", "402" },
 /* 403 */
-  { ERR_NOSUCHCHANNEL, "%s :Ce salon n'existe pas", "403" },
+  { ERR_NOSUCHCHANNEL, "%s :No such channel", "403" },
 /* 404 */
-  { ERR_CANNOTSENDTOCHAN, "%s :Ne peut envoyer sur le salon", "404" },
+  { ERR_CANNOTSENDTOCHAN, "%s :Cannot send to channel", "404" },
 /* 405 */
-  { ERR_TOOMANYCHANNELS, "%s :Vous avez rejoint le nombre maximum de salons", "405" },
+  { ERR_TOOMANYCHANNELS, "%s :You have joined too many channels", "405" },
 /* 406 */
-  { ERR_WASNOSUCHNICK, "%s :Ce pseudonyme n'existait pas", "406" },
+  { ERR_WASNOSUCHNICK, "%s :There was no such nickname", "406" },
 /* 407 */
-  { ERR_TOOMANYTARGETS, "%s :Trop de cibles, le message n'a pas été envoyé.", "407" },
+  { ERR_TOOMANYTARGETS, "%s :Duplicate recipients. No message delivered", "407" },
 /* 408 */
   { ERR_SEARCHNOMATCH, ":%s Pas de réponse trouvée", "408" },
 /* 409 */
-  { ERR_NOORIGIN, ":Pas d'origine spécifiée", "409" },
+ { ERR_NOORIGIN, ":No origin specified", "409" },
 /* 410 */
   { ERR_NONICKCHANGE, ":Changement de Pseudo interdit !", "410" },
 /* 411 */
-  { ERR_NORECIPIENT, ":Pas de cible spécifiée (%s)", "411" },
+  { ERR_NORECIPIENT, ":No recipient given (%s)", "411" },
 /* 412 */
-  { ERR_NOTEXTTOSEND, ":Pas de texte à envoyer", "412" },
+  { ERR_NOTEXTTOSEND, ":No text to send", "412" },
 /* 413 */
-  { ERR_NOTOPLEVEL, "%s :Pas de domaine toplevel spécifié", "413" },
+  { ERR_NOTOPLEVEL, "%s :No toplevel domain specified", "413" },
 /* 414 */
-  { ERR_WILDTOPLEVEL, "%s :Wilcards dans le domaine toplevel", "414" },
+  { ERR_WILDTOPLEVEL, "%s :Wildcard in toplevel Domain", "414" },
 /* 415 */
   { ERR_NOMULTITARGET, "%s :Ne peut envoyer sur le salon (Pas de messages multi-cibles +T)", "415" },
  /* 416 */
-  { ERR_QUERYTOOLONG, "%s :Trop de lignes dans le résultat", "416" },
+  { ERR_QUERYTOOLONG, "%s :Too many lines in the output, restrict your query", "416" },
 /* 417 */
   { 0 },
 /* 418 */
@@ -873,11 +873,11 @@ static Numeric replyTable[] = {
 /* 420 */
   { 0 },
 /* 421 */
-  { ERR_UNKNOWNCOMMAND, "%s :Commande inconnue", "421" },
+  { ERR_UNKNOWNCOMMAND, "%s :Unknown command", "421" },
 /* 422 */
-  { ERR_NOMOTD, ":Le fichier MOTD est introuvable", "422" },
+  { ERR_NOMOTD, ":MOTD File is missing", "422" },
 /* 423 */
-  { ERR_NOADMININFO, "%s :Pas d'informations adiministratives disponibles", "423" },
+  { ERR_NOADMININFO, "%s :No administrative info available", "423" },
 /* 424 */
   { 0 },
 /* 425 */
@@ -893,31 +893,31 @@ static Numeric replyTable[] = {
 /* 430 */
   { 0 },
 /* 431 */
-  { ERR_NONICKNAMEGIVEN, ":Pas de pseudonyme donné", "431" },
+  { ERR_NONICKNAMEGIVEN, ":No nickname given", "431" },
 /* 432 */
-  { ERR_ERRONEUSNICKNAME, "%s :Pseudonyme erroné", "432" },
+  { ERR_ERRONEUSNICKNAME, "%s :Erroneous Nickname", "432" },
 /* 433 */
-  { ERR_NICKNAMEINUSE, "%s :Pseudonyme déja utilisé", "433" },
+  { ERR_NICKNAMEINUSE, "%s :Nickname is already in use.", "433" },
 /* 434 */
   { ERR_NORULES, ":RULES Fichier manquant", "434" },
 /* 435 */
   { 0 },
 /* 436 */
-  { ERR_NICKCOLLISION, "%s :Collision de Pseudonyme KILL", "436" },
+  { ERR_NICKCOLLISION, "%s :Nickname collision KILL", "436" },
 /* 437 */
-  { ERR_BANNICKCHANGE, "%s :Ne peut changer de pseudo étant banni sur un salon ou sur un salon modéré (+r/+R/+m)", "437" },
+  { ERR_BANNICKCHANGE, "%s :Cannot change nickname while banned on channel or on moderate channel (+r/+R/+m)", "437" },
 /* 438 */
-  { ERR_NICKTOOFAST, "%s :Changement de pseudo trop rapide. Attendez %d secondes.", "438" },
+  { ERR_NICKTOOFAST, "%s :Nick change too fast. Please wait %d seconds.", "438" },
 /* 439 */
-  { ERR_TARGETTOOFAST, "%s :Changement de cible trop rapide. Attendez %d seconds.", "439" },
+  { ERR_TARGETTOOFAST, "%s :Target change too fast. Please wait %d seconds.", "439" },
 /* 440 */
   { ERR_SERVICESDOWN, "%s :Le Service demandé n'est pas disponible actuellement.", "440" },
 /* 441 */
-  { ERR_USERNOTINCHANNEL, "%s %s :Ils ne sont pas sur ce salon", "441" },
+  { ERR_USERNOTINCHANNEL, "%s %s :They aren't on that channel", "441" },
 /* 442 */
-  { ERR_NOTONCHANNEL, "%s :Vous n'êtes pas dans ce salon", "442" },
+  { ERR_NOTONCHANNEL, "%s :You're not on that channel", "442" },
 /* 443 */
-  { ERR_USERONCHANNEL, "%s %s :est déja sur le salon", "443" },
+  { ERR_USERONCHANNEL, "%s %s :is already on channel", "443" },
 /* 444 */
   { 0 },
 /* 445 */
@@ -933,7 +933,7 @@ static Numeric replyTable[] = {
 /* 450 */
   { 0 },
 /* 451 */
-  { ERR_NOTREGISTERED, ":Vous n'êtes pas enregistré", "451" },
+  { ERR_NOTREGISTERED, ":You have not registered", "451" },
 /* 452 */
   { 0 },
 /* 453 */
@@ -953,19 +953,19 @@ static Numeric replyTable[] = {
 /* 460 */
   { 0 },
 /* 461 */
-  { ERR_NEEDMOREPARAMS, "%s :Pas assez de paramètres", "461" },
+  { ERR_NEEDMOREPARAMS, "%s :Not enough parameters", "461" },
 /* 462 */
-  { ERR_ALREADYREGISTRED, ":Vous ne devez pas vous ré-enregistrer", "462" },
+  { ERR_ALREADYREGISTRED, ":You may not reregister", "462" },
 /* 463 */
-  { ERR_NOPERMFORHOST, ":Votre host n'est pas privilégié", "463" },
+  { ERR_NOPERMFORHOST, ":Your host isn't among the privileged", "463" },
 /* 464 */
-  { ERR_PASSWDMISMATCH, ":Mot de passe incorrect", "464" },
+  { ERR_PASSWDMISMATCH, ":Password Incorrect", "464" },
 /* 465 */
-  { ERR_YOUREBANNEDCREEP, ":Vous êtes banni de ce serveur", "465" },
+  { ERR_YOUREBANNEDCREEP, ":You are banned from this server", "465" },
 /* 466 */
   { ERR_YOUWILLBEBANNED, "", "466" },
 /* 467 */
-  { ERR_KEYSET, "%s :Clef du salon déja mise.", "467" },
+ { ERR_KEYSET, "%s :Channel key already set", "467" },
 /* 468 */
   { ERR_INVALIDUSERNAME, 0, "468" },
 /* 469 */
@@ -973,33 +973,33 @@ static Numeric replyTable[] = {
 /* 470 */
   { 0 },
 /* 471 */
-  { ERR_CHANNELISFULL, "%s :Ne peut rejoindre le salon (+l)", "471" },
+  { ERR_CHANNELISFULL, "%s :Cannot join channel (+l)", "471" },
 /* 472 */
-  { ERR_UNKNOWNMODE, "%c :est un mode inconnu", "472" },
+  { ERR_UNKNOWNMODE, "%c :is unknown mode char to me", "472" },
 /* 473 */
-  { ERR_INVITEONLYCHAN, "%s :Ne peut rejoindre le salon (+i)", "473" },
+  { ERR_INVITEONLYCHAN, "%s :Cannot join channel (+i)", "473" },
 /* 474 */
-  { ERR_BANNEDFROMCHAN, "%s :Ne peut rejoindre le salon (+b)", "474" },
+  { ERR_BANNEDFROMCHAN, "%s :Cannot join channel (+b)", "474" },
 /* 475 */
-  { ERR_BADCHANNELKEY, "%s :Ne peut rejoindre le salon (+k)", "475" },
+  { ERR_BADCHANNELKEY, "%s :Cannot join channel (+k)", "475" },
 /* 476 */
-  { ERR_BADCHANMASK, "%s :Mauvais Channel Mask", "476" },
+  { ERR_BADCHANMASK, "%s :Bad Channel Mask", "476" },
 /* 477 */
-  { ERR_NEEDREGGEDNICK, "%s :Ne peut rejoindre le salon (+r)", "477" },
+  { ERR_NEEDREGGEDNICK, "%s :Cannot join channel (+r)", "477" },
 /* 478 */
-  { ERR_BANLISTFULL, "%s %s :Ne peut bannir/ignorer, la liste est pleine", "478" },
+  { ERR_BANLISTFULL, "%s %s :Channel ban/ignore list is full", "478" },
 /* 479 */
-  { ERR_BADCHANNAME, "%s :Salon Fermé (Raison: %s)", "479" },
+  { ERR_BADCHANNAME, "%s :Cannot join channel (access denied on this server: %s)", "479" },
 /* 480 */
   { ERR_NOKICKAUTORIZED, ":%s", "480" },
 /* 481 */
-  { ERR_NOPRIVILEGES, ":Permission refusée: Privilèges insuffisants", "481" },
+  { ERR_NOPRIVILEGES, ":Permission Denied: Insufficient privileges", "481" },
 /* 482 */
-  { ERR_CHANOPRIVSNEEDED, "%s :Vous n'êtes pas opérateur sur le salon", "482" },
+  { ERR_CHANOPRIVSNEEDED, "%s :You're not channel operator", "482" },
 /* 483 */
-  { ERR_CANTKILLSERVER, ":Vous ne pouvez pas killer un serveur!", "483" },
+  { ERR_CANTKILLSERVER, ":You cant kill a server!", "483" },
 /* 484 */
-  { ERR_ISCHANSERVICE, "%s %s :Vous ne pouvez pas deopper, kicker, ou killer un Service", "484" },
+  { ERR_ISCHANSERVICE, "%s %s :Cannot kill, kick or deop a network service", "484" },
 /* 485 */
   { ERR_ISGODMODE, "%s %s :Vous ne pouvez pas deopper, kicker, ou killer un Ircop", "485" },
 /* 486 */
@@ -1009,33 +1009,33 @@ static Numeric replyTable[] = {
 /* 488 */
   { 0 },
 /* 489 */
-  { ERR_VOICENEEDED, "%s :Vous n'êtes ni voice ni op sur le salon", "489" },
+  { ERR_VOICENEEDED, "%s :You're neither voiced nor channel operator", "489" },
 /* 490 */
   { 0 },
 /* 491 */
-  { ERR_NOOPERHOST, ":Pas de O-Line pour votre host", "491" },
+  { ERR_NOOPERHOST, ":No O-lines for your host", "491" },
 /* 492 */
   { 0 },
 /* 493 */
-  { ERR_NOFEATURE, "%s :Cette F-Line n'existe pas", "493" },
+  { ERR_NOFEATURE, "%s :No such feature", "493" },
 /* 494 */
-  { ERR_BADFEATVALUE, "%s :Mauvaise valeur pour la F-Line %s", "494" },
+  { ERR_BADFEATVALUE, "%s :Bad value for feature %s", "494" },
 /* 495 */
-  { ERR_BADLOGTYPE, "%s :Ce type de log n'existe pas", "495" },
+  { ERR_BADLOGTYPE, "%s :No such log type", "495" },
 /* 496 */
-  { ERR_BADLOGSYS, "%s :Ce type de log subsystem n'existe pas", "496" },
+  { ERR_BADLOGSYS, "%s :No such log subsystem", "496" },
 /* 497 */
-  { ERR_BADLOGVALUE, "%s :Mauvaise valeur pour ce type de log", "497" },
+  { ERR_BADLOGVALUE, "%s :Bad value for log type", "497" },
 /* 498 */
-  { ERR_ISOPERLCHAN, "%s %s :Vous ne pouvez pas deopper, kicker, ou killer un IRC Operateur sur un salon local", "498" },
+  { ERR_ISOPERLCHAN, "%s %s :Cannot kick or deop an IRC Operator on a local channel", "498" },
 /* 499 */
   { 0 },
 /* 500 */
   { 0 },
 /* 501 */
-  { ERR_UMODEUNKNOWNFLAG, "%c :Usermode inconnu", "501" },
+  { ERR_UMODEUNKNOWNFLAG, "%c :Unknown User mode flag", "501" },
 /* 502 */
-  { ERR_USERSDONTMATCH, ":Ne peut changer les modes des autres users", "502" },
+  { ERR_USERSDONTMATCH, ":Cant change mode for other users", "502" },
 /* 503 */
   { 0 },
 /* 504 */
@@ -1053,23 +1053,23 @@ static Numeric replyTable[] = {
 /* 510 */
   { 0 },
 /* 511 */
-  { ERR_SILELISTFULL, "%s :Votre silence list est pleine", "511" },
+  { ERR_SILELISTFULL, "%s :Your silence list is full", "511" },
 /* 512 */
-  { ERR_NOSUCHGLINE, "%s :G-Line inconnu", "512" },
+  { ERR_NOSUCHGLINE, "%s :No such gline", "512" },
 /* 513 */
   { ERR_BADPING, 0, "513" },
 /* 514 */
-  { ERR_NOSUCHJUPE, "%s :Jupe inconnu", "514" },
+  { ERR_NOSUCHJUPE, "%s :No such jupe", "514" },
 /* 515 */
-  { ERR_BADEXPIRE, "%Tu :Expire time erroné", "515" },
+  { ERR_BADEXPIRE, "%Tu :Bad expire time", "515" },
 /* 516 */
-  { ERR_DONTCHEAT, ":On ne triche pas !", "516" },
+  { ERR_DONTCHEAT, " :Don't Cheat.", "516" },
 /* 517 */
-  { ERR_DISABLED, "%s :Commande désactivée.", "517" },
+  { ERR_DISABLED, "%s :Command disabled.", "517" },
 /* 518 */
-  { ERR_LONGMASK, " :Le mask est trop long", "518" },
+  { ERR_LONGMASK, " :Mask is too long", "518" },
 /* 519 */
-  { ERR_TOOMANYUSERS, "%d :Trop d'users sont affectés par le mask", "519" },
+  { ERR_TOOMANYUSERS, "%d :Too many users affected by mask", "519" },
 /* 520 */
   { ERR_OPERONLY, "%s :Ne peut rejoindre le salon (+O: nécessite d'être un IRC Opérateur)", "520" },
 /* 521 */
