@@ -146,16 +146,16 @@ int ms_connect(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
    * present below. --Bleep
    */
   if (0 == (aconf = conf_find_server(parv[1]))) {
-    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Connect: Host %s non listé "
-		  "dans ircd.conf", sptr, parv[1]);
+    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Connect: Host %s not listed "
+		  "in ircd.conf", sptr, parv[1]);
     return 0;
   }
   /*
    * use aconf->name to look up the server
    */
   if ((acptr = FindServer(aconf->name))) {
-    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Connect: Serveur %s existe "
-		  "déjà depuis %s", sptr, parv[1], cli_name(cli_from(acptr)));
+    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Connect: Server %s already "
+		  "exists from %s", sptr, parv[1], cli_name(cli_from(acptr)));
     return 0;
   }
   /*
@@ -165,14 +165,14 @@ int ms_connect(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
    * lines (CRULEALL) not d lines (CRULEAUTO).
    */
   if ((rule = conf_eval_crule(aconf->name, CRULE_ALL))) {
-    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Connect: Disactivé par rule: %s", sptr, rule);
+    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Connect: Disallowed by rule: %s", sptr, rule);
     return 0;
   }
   /*
    * Check to see if the server is juped; if it is, disallow the connect
    */
   if ((ajupe = jupe_find(aconf->name)) && JupeIsActive(ajupe)) {
-    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Connect: Server %s est jupe: %s",
+    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Connect: Server %s is juped: %s",
 		  sptr, JupeServer(ajupe), JupeReason(ajupe));
     return 0;
   }
@@ -196,18 +196,18 @@ int ms_connect(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
    * Notify all operators about remote connect requests
    */
   sendwallto_group_butone(&me, WALL_WALLOPS, 0,
-			"CONNECT distant %s %s depuis %s", parv[1],
+			"Remote CONNECT %s %s from %s", parv[1],
 			parv[2] ? parv[2] : "",
 			get_client_name(sptr, HIDE_IP));
-  log_write(LS_NETWORK, L_INFO, 0, "CONNECT depuis %C : %s %s", sptr, parv[1],
+  log_write(LS_NETWORK, L_INFO, 0, "CONNECT From %C : %s %s", sptr, parv[1],
 	    parv[2] ? parv[2] : "");
 
   if (connect_server(aconf, sptr, 0)) {
-    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :*** Connexion vers %s.", sptr,
+    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :*** Connecting to %s.", sptr,
 		  aconf->name);
   }
   else {
-    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :*** Connexion vers %s échoué",
+    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :*** Connection to %s failed",
 		  sptr, aconf->name);
   }
   aconf->port = tmpport;
@@ -271,16 +271,16 @@ int mo_connect(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
    * present below. --Bleep
    */
   if (0 == (aconf = conf_find_server(parv[1]))) {
-    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Connect: Host %s non listé "
-		  "dans ircd.conf", sptr, parv[1]);
+    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Connect: Host %s not listed "
+		  "in ircd.conf", sptr, parv[1]);
     return 0;
   }
   /*
    * use aconf->name to look up the server, see above
    */
   if ((acptr = FindServer(aconf->name))) {
-    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Connect: Serveur %s existe "
-		  "déjà depuis %s", sptr, parv[1], cli_name(cli_from(acptr)));
+    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Connect: Server %s already "
+		  "exists from %s", sptr, parv[1], cli_name(cli_from(acptr)));
     return 0;
   }
   /*
@@ -290,14 +290,14 @@ int mo_connect(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
    * lines (CRULEALL) not d lines (CRULEAUTO).
    */
   if ((rule = conf_eval_crule(aconf->name, CRULE_ALL))) {
-    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Connect: Désactivé par rule: %s", sptr, rule);
+    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Connect: Disallowed by rule: %s", sptr, rule);
     return 0;
   }
   /*
    * Check to see if the server is juped; if it is, disallow the connect
    */
   if ((ajupe = jupe_find(aconf->name)) && JupeIsActive(ajupe)) {
-    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Connect: Serveur %s est jupe: %s",
+    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Connect: Server %s is juped: %s",
 		  sptr, JupeServer(ajupe), JupeReason(ajupe));
     return 0;
   }
@@ -310,13 +310,13 @@ int mo_connect(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   if (parc > 2) {
     assert(0 != parv[2]);
     if (0 == (port = atoi(parv[2]))) {
-      sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Connect: numéro de port invalide",
+      sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Connect: Invalid port number",
 		    sptr);
       return 0;
     }
   }
   if (0 == port && 0 == (port = feature_int(FEAT_SERVER_PORT))) {
-    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Connect: numéro de port manquant",
+    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :Connect: missing port number",
 		  sptr);
     return 0;
   }
@@ -325,11 +325,11 @@ int mo_connect(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   aconf->port = port;
 
   if (connect_server(aconf, sptr, 0)) {
-    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :*** Connecting vers %s.", sptr,
+    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :*** Connecting to %s.", sptr,
 		  aconf->name);
   }
   else {
-    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :*** Connection vers %s échoué",
+    sendcmdto_one(&me, CMD_NOTICE, sptr, "%C :*** Connection to %s failed",
 		  sptr, aconf->name);
   }
   aconf->port = tmpport;
