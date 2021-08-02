@@ -847,11 +847,11 @@ static Numeric replyTable[] = {
 /* 407 */
   { ERR_TOOMANYTARGETS, "%s :Duplicate recipients. No message delivered", "407" },
 /* 408 */
-  { ERR_SEARCHNOMATCH, ":%s Pas de réponse trouvée", "408" },
+  { ERR_SEARCHNOMATCH, ":%s No response found", "408" },
 /* 409 */
  { ERR_NOORIGIN, ":No origin specified", "409" },
 /* 410 */
-  { ERR_NONICKCHANGE, ":Changement de Pseudo interdit !", "410" },
+  { ERR_NONICKCHANGE, ":Nickname change prohibited !", "410" },
 /* 411 */
   { ERR_NORECIPIENT, ":No recipient given (%s)", "411" },
 /* 412 */
@@ -861,13 +861,13 @@ static Numeric replyTable[] = {
 /* 414 */
   { ERR_WILDTOPLEVEL, "%s :Wildcard in toplevel Domain", "414" },
 /* 415 */
-  { ERR_NOMULTITARGET, "%s :Ne peut envoyer sur le salon (Pas de messages multi-cibles +T)", "415" },
+  { ERR_NOMULTITARGET, "%s :Unable to send to channel (No multi-target messages +T)", "415" },
  /* 416 */
   { ERR_QUERYTOOLONG, "%s :Too many lines in the output, restrict your query", "416" },
 /* 417 */
   { 0 },
 /* 418 */
-  { ERR_SVSCOM, ":Erreur sur la commande %s: %s", "418" },
+  { ERR_SVSCOM, ":Command error %s: %s", "418" },
 /* 419 */
   { 0 },
 /* 420 */
@@ -899,7 +899,7 @@ static Numeric replyTable[] = {
 /* 433 */
   { ERR_NICKNAMEINUSE, "%s :Nickname is already in use.", "433" },
 /* 434 */
-  { ERR_NORULES, ":RULES Fichier manquant", "434" },
+  { ERR_NORULES, ":RULES File missing", "434" },
 /* 435 */
   { 0 },
 /* 436 */
@@ -911,7 +911,7 @@ static Numeric replyTable[] = {
 /* 439 */
   { ERR_TARGETTOOFAST, "%s :Target change too fast. Please wait %d seconds.", "439" },
 /* 440 */
-  { ERR_SERVICESDOWN, "%s :Le Service demandé n'est pas disponible actuellement.", "440" },
+  { ERR_SERVICESDOWN, "%s :The requested Service is not currently available.", "440" },
 /* 441 */
   { ERR_USERNOTINCHANNEL, "%s %s :They aren't on that channel", "441" },
 /* 442 */
@@ -1001,11 +1001,11 @@ static Numeric replyTable[] = {
 /* 484 */
   { ERR_ISCHANSERVICE, "%s %s :Cannot kill, kick or deop a network service", "484" },
 /* 485 */
-  { ERR_ISGODMODE, "%s %s :Vous ne pouvez pas deopper, kicker, ou killer un Ircop", "485" },
+  { ERR_ISGODMODE, "%s %s :You cannot deop, kick, or kill an Ircop", "485" },
 /* 486 */
-  { ERR_CANTSENDPRIVATE, "%s :Vous ne pouvez pas envoyer de message privés à cette personne", "486" },
+  { ERR_CANTSENDPRIVATE, "%s :You cannot send him a private message", "486" },
 /* 487 */
-  { ERR_ISHELPER, "%s %s :Vous ne pouvez pas kicker un Helpeur", "487" },
+  { ERR_ISHELPER, "%s %s :You cannot kick an Helper", "487" },
 /* 488 */
   { 0 },
 /* 489 */
@@ -1071,41 +1071,41 @@ static Numeric replyTable[] = {
 /* 519 */
   { ERR_TOOMANYUSERS, "%d :Too many users affected by mask", "519" },
 /* 520 */
-  { ERR_OPERONLY, "%s :Ne peut rejoindre le salon (+O: nécessite d'être un IRC Opérateur)", "520" },
+  { ERR_OPERONLY, "%s :Cannot join this channel (+O: need to be an IRC Operator)", "520" },
 /* 521 */
   { 0 },
 /* 522 */
-  { ERR_WHOSYNTAX, " :La syntaxe de /WHO est incorrecte, tapez /who ? pour avoir de l'aide", "522" },
+  { ERR_WHOSYNTAX, " :The syntax of /WHO is incorrect, type /who ? for help", "522" },
 /* 523 */
   { 0 },
 /* 524 */
   { ERR_QUARANTINED, "%s :%s", "524" },
 /* 525 */
-  { RPL_OMOTDSTART, ":%s MOTD IRC Opérateur", "525" },
+  { RPL_OMOTDSTART, ":%s MOTD IRC Operator", "525" },
 /* 526 */
   { RPL_OMOTD, ":- %s", "526" },
 /* 527 */
-  { RPL_ENDOFOMOTD, ":Fin de la MOTD IRC Opérateur.", "527" },
+  { RPL_ENDOFOMOTD, ":End of MOTD IRC Operator.", "527" },
 /* 528 */
-  { ERR_INVUSERORPASS, ":nom d'utilisateur / mot de passe invalide", "528" },
+  { ERR_INVUSERORPASS, ":invalid username / password", "528" },
 /* 529 */
   { 0 },
 /* 530 */
-  { ERR_BADHOSTMASK, "%s :Username/Hostmask invalide", "530" },
+  { ERR_BADHOSTMASK, "%s : invalid Username/Hostmask", "530" },
 /* 531 */
-  { ERR_HOSTUNAVAIL, "%s :Host non trouvée", "531" },
+  { ERR_HOSTUNAVAIL, "%s :Host not found", "531" },
 /* 532 */
-  { ERR_HOSTALREADYSET, ":Un VHOST a déjà été défini", "532" },
+  { ERR_HOSTALREADYSET, ":A VHOST has already been defined", "532" },
 /* 533 */
-  { ERR_VHOSTBADSIZE, ":%s trop %s (max. %d caractères)", "533" },
+  { ERR_VHOSTBADSIZE, ":%s trop %s (max. %d)", "533" },
 /* 534 */
-  { ERR_BADHOST, "%s : Hostname invalide", "534" },
+  { ERR_BADHOST, "%s : invalid Hostname", "534" },
 /* 535 */
   { RPL_RULESSTART, ":- %s Network Rules - ", "535" },
 /* 536 */
   { RPL_RULES, ":- %s", "536" },
 /* 537 */
-  { RPL_ENDOFRULES, ":Fin de la liste /RULES ", "537" },
+  { RPL_ENDOFRULES, ":End of /RULES", "537" },
 /* 538 */
   { 0 },
 /* 539 */
@@ -1117,11 +1117,11 @@ static Numeric replyTable[] = {
 /* 542 */
   { RPL_STATSSHUN, "%c %s%s%s%s%s %Tu :%s", "542" },
 /* 543 */
-  { ERR_NOSUCHSHUN, "%s :Aucun SHUN trouvé", "543" },
+  { ERR_NOSUCHSHUN, "%s :no SHUN found", "543" },
 /* 544 */
   { RPL_SLIST, "%s%s%s%s%s %Tu %s %c :%s", "544" },
 /* 545 */
-  { RPL_ENDOFSLIST, ":Fin de la liste SHUN", "545" },
+  { RPL_ENDOFSLIST, ":End of /SHUN command.", "545" },
 /* 546 */
   { 0 },
 /* 547 */
