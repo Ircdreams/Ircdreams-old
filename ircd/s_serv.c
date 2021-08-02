@@ -20,7 +20,6 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: s_serv.c,v 1.10 2005/12/09 05:27:44 bugs Exp $
  */
 #include "../config.h"
 
@@ -147,7 +146,7 @@ int server_estab(struct Client *cptr, struct ConfItem *aconf)
   if (cli_serv(cptr)->user && *(cli_serv(cptr))->by &&
       (acptr = findNUser(cli_serv(cptr)->by))) {
     if (cli_user(acptr) == cli_serv(cptr)->user) {
-      sendcmdto_one(&me, CMD_NOTICE, acptr, "%C :Lien avec %s établi!",
+      sendcmdto_one(&me, CMD_NOTICE, acptr, "%C :Link with %s established.",
                     acptr, inpath);
     }
     else {
@@ -159,10 +158,10 @@ int server_estab(struct Client *cptr, struct ConfItem *aconf)
     }
   }
 
-  sendto_opmask_butone(acptr, SNO_OLDSNO, "Lien avec %s établi!", inpath);
+  sendto_opmask_butone(acptr, SNO_OLDSNO, "Link with %s established.", inpath);
   cli_serv(cptr)->up = &me;
   cli_serv(cptr)->updown = add_dlink(&(cli_serv(&me))->down, cptr);
-  sendto_opmask_butone(0, SNO_NETWORK, "Jonction des serveurs: %s %s", cli_name(&me),
+  sendto_opmask_butone(0, SNO_NETWORK, "Net junction: %s %s", cli_name(&me),
                        cli_name(cptr));
   SetJunction(cptr);
   /*

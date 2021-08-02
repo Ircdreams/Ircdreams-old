@@ -152,11 +152,11 @@ int m_oper(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 
   if (!aconf || IsIllegal(aconf)) {
     send_reply(sptr, ERR_NOOPERHOST);
-    sendto_allops(&me, SNO_OLDREALOP, "Tentative de OPER par %s (%s@%s) sur la oline %s",
+    sendto_allops(&me, SNO_OLDREALOP, "Failed OPER attempt by %s (%s@%s), oline %s",
 			 parv[0], cli_user(sptr)->username, cli_user(sptr)->realhost, name);
     if(feature_bool(FEAT_LOG_GESTION_MAIL) && feature_bool(FEAT_ALERTE_OPER))
     {
-    	ircd_snprintf(0, buf, sizeof buf, "Tentative de OPER par %s (%s@%s) sur la oline %s (host non valide)",
+    	ircd_snprintf(0, buf, sizeof buf, "Failed OPER attempt by %s (%s@%s), oline %s (invalid host)",
                  parv[0], cli_user(sptr)->username, cli_user(sptr)->realhost, name);
     	admin_sendmail(buf);
     }
@@ -169,12 +169,12 @@ int m_oper(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 
     if (ACR_OK != attach_conf(sptr, aconf)) {
       send_reply(sptr, ERR_NOOPERHOST);
-      sendto_allops(&me, SNO_OLDREALOP, "Tentative de OPER par %s "
-			   "(%s@%s) sur la oline %s", parv[0], cli_user(sptr)->username,
+      sendto_allops(&me, SNO_OLDREALOP, "Failed OPER attempt by %s "
+			   "(%s@%s), oline %s", parv[0], cli_user(sptr)->username,
 			   cli_user(sptr)->realhost, name);
       if(feature_bool(FEAT_LOG_GESTION_MAIL) && feature_bool(FEAT_ALERTE_OPER))
       {
-      	ircd_snprintf(0, buf, sizeof buf, "Tentative de OPER par %s (%s@%s) sur la oline %s (host non valide)",
+      	ircd_snprintf(0, buf, sizeof buf, "Failed OPER attempt by %s (%s@%s), oline %s (invalid host)",
 		 parv[0], cli_user(sptr)->username, cli_user(sptr)->realhost, name);
       	admin_sendmail(buf);
       }
@@ -220,14 +220,14 @@ int m_oper(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
     client_set_privs(sptr);
     cli_max_sendq(sptr) = 0; /* Get the sendq from the oper's class */
     send_umode_out(cptr, sptr, &old_mode, HasPriv(sptr, PRIV_PROPAGATE));
-    send_reply(sptr, RPL_YOUREOPER, IsFemale(sptr) ? "une IRC Opératrice" : "un IRC Opérateur");
+    send_reply(sptr, RPL_YOUREOPER);
 
     if(IsAnAdmin(sptr))
-      sendto_allops(&me, SNO_OLDSNO, "%s (%s@%s) est maintenant un IRC Administrateur (A%s%s) sur la oline %s",
+      sendto_allops(&me, SNO_OLDSNO, "%s (%s@%s) is now an IRC Administrator (A%s%s) on oline %s",
 			 parv[0], cli_user(sptr)->username, cli_user(sptr)->realhost,
 			 CanSetVars(sptr) ? "V" : "", CanSA(sptr) ? "S" : "", name);
     else 
-      sendto_allops(&me, SNO_OLDSNO, "%s (%s@%s) est maintenant un IRC Opérateur (%s) sur la oline %s",
+      sendto_allops(&me, SNO_OLDSNO, "%s (%s@%s) is now an IRC Operator (%s) on oline %s",
 			 parv[0], cli_user(sptr)->username, cli_user(sptr)->realhost,
 			 oflagstr(cli_oflags(sptr)), name);
     
@@ -253,11 +253,11 @@ int m_oper(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
   }
   else {
     send_reply(sptr, ERR_PASSWDMISMATCH);
-    sendto_allops(&me, SNO_OLDREALOP, "Tentative de OPER par %s (%s@%s) sur la oline %s",
+    sendto_allops(&me, SNO_OLDREALOP, "Failed OPER attempt by %s (%s@%s) on oline %s",
 			 parv[0], cli_user(sptr)->username, cli_user(sptr)->realhost, name);
     if(feature_bool(FEAT_LOG_GESTION_MAIL) && feature_bool(FEAT_ALERTE_OPER))
     {
-	ircd_snprintf(0, buf, sizeof buf, "Tentative de OPER par %s (%s@%s) sur la oline %s (mot de passe invalide)",
+	ircd_snprintf(0, buf, sizeof buf, "Failed OPER attempt by %s (%s@%s) on oline %s (invalid password)",
  	       parv[0], cli_user(sptr)->username, cli_user(sptr)->realhost, name);
     	admin_sendmail(buf);
     }
@@ -290,6 +290,6 @@ int mo_oper(struct Client* cptr, struct Client* sptr, int parc, char* parv[])
 {
   assert(0 != cptr);
   assert(cptr == sptr);
-  send_reply(sptr, RPL_YOUREOPER, IsFemale(sptr) ? "une IRC Opératrice" : "un IRC Opérateur");
+  send_reply(sptr, RPL_YOUREOPER);
   return 0;
 }

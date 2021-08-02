@@ -793,7 +793,7 @@ static Numeric replyTable[] = {
 /* 380 */
   { 0 },
 /* 381 */
-  { RPL_YOUREOPER, ":You are %s", "381" },
+  { RPL_YOUREOPER, ":You are an IRC Operator", "381" },
 /* 382 */
   { RPL_REHASHING, "%s :Rehashing", "382" },
 /* 383 */
