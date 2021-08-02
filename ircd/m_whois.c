@@ -210,7 +210,7 @@ static void do_whois(struct Client* sptr, struct Client *acptr, int parc)
 	send_reply(sptr, RPL_WHOISCRYPT, name);
 
     if (IsMale(acptr) || IsFemale(acptr))
-       send_reply(sptr, RPL_SEXE, name, IsMale(acptr) ? "" : "e", IsMale(acptr) ? "homme" : "femme");
+       send_reply(sptr, RPL_SEXE, name,  IsMale(acptr) ? "man" : "woman");
 
     if (IsProtect(acptr) && (!IsHideOper(acptr) || IsAnOper(sptr) || acptr == sptr))
        send_reply(sptr, RPL_GODMODE, name);
@@ -220,17 +220,10 @@ static void do_whois(struct Client* sptr, struct Client *acptr, int parc)
 
     if (IsAnOper(acptr) && (HasPriv(acptr, PRIV_DISPLAY) || HasPriv(sptr, PRIV_SEE_OPERS)) &&
 	(!IsHideOper(acptr) || IsAnOper(sptr) || acptr == sptr)) /* putain de conditions hein !? */
-       send_reply(sptr, RPL_WHOISOPERATOR, name, IsFemale(acptr) ? "une IRC Opératrice" : "un IRC Opérateur",
-          IsChannelService(acptr) ?  /* ça fait plus structuré ainsi :p */
-	    " * Service"
-	  : IsAnAdmin(acptr) ?
-	      IsFemale(acptr) ?
-	       " * Administratrice"
-	      : " * Administrateur"
-	  : "");
+       send_reply(sptr, RPL_WHOISOPERATOR, name, IsChannelService(acptr) ?  " * Service" : IsAnAdmin(acptr) ? " * Administrator" : "");
 
     if (IsWhois(acptr) && (cli_name(acptr) != cli_name(sptr))) {
-           sendcmdto_one(&me, CMD_NOTICE, acptr, "%C :*** Notice -- %s (%s@%s) fait un /WHOIS sur vous!", acptr, cli_name(sptr),
+           sendcmdto_one(&me, CMD_NOTICE, acptr, "%C :*** Notice -- %s (%s@%s) do a /WHOIS on you!", acptr, cli_name(sptr),
            cli_user(sptr)->username, cli_user(sptr)->realhost);
     }
 
@@ -238,7 +231,7 @@ static void do_whois(struct Client* sptr, struct Client *acptr, int parc)
 	send_reply(sptr, RPL_WHOISHIDING, name);	
 
     if (IsHelper(acptr))
-      send_reply(sptr, RPL_WHOISHELPER, name, IsFemale(acptr) ? "e" : "", IsFemale(acptr) ? "euse" : "eur");
+      send_reply(sptr, RPL_WHOISHELPER, name);
 
     if (IsAnOper(sptr) || acptr == sptr)
        send_reply(sptr, RPL_MODES, name, umode_str(acptr));
@@ -247,7 +240,7 @@ static void do_whois(struct Client* sptr, struct Client *acptr, int parc)
       send_reply(sptr, RPL_SWHOIS, name, user->swhois);
 
     if (IsAccount(acptr)) 
-      send_reply(sptr, RPL_WHOISACCOUNT, name, user->account, IsFemale(acptr) ? "e" : "");
+      send_reply(sptr, RPL_WHOISACCOUNT, name, user->account);
 
     if (IsSSL(acptr))
       send_reply(sptr, RPL_WHOISSSL, name);

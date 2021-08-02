@@ -603,7 +603,7 @@ static Numeric replyTable[] = {
 /* 285 */
   { RPL_NEWHOSTIS, "%s: %s host %s - [%s@%s]" },
 /* 286 */
-  { RPL_CHKHEAD, ":Informations pour %s '%s'", "286" },
+  { RPL_CHKHEAD, ":Informations for %s '%s'", "286" },
 /* 287 */
   { RPL_CHANUSER, ":    %s%s (%s@%s)   (%s)", "287" },
 /* 288 */
@@ -651,19 +651,19 @@ static Numeric replyTable[] = {
 /* 309 */
   { 0 },
 /* 310 */
-  { RPL_WHOISHELPER, "%s :est un%s Help%s (Agent d'Aide du Réseau)", "310" },
+  { RPL_WHOISHELPER, "%s :is an Helper (Network Help Agent)", "310" },
 /* 311 */
   { RPL_WHOISUSER, "%s %s %s * :%s", "311" },
 /* 312 */
   { RPL_WHOISSERVER, "%s %s :%s", "312" },
 /* 313 */
-  { RPL_WHOISOPERATOR, "%s :is %s%s", "313" },
+  { RPL_WHOISOPERATOR, "%s :is an IRC Operator%s", "313" },
 /* 314 */
   { RPL_WHOWASUSER, "%s %s %s * :%s", "314" },
 /* 315 */
   { RPL_ENDOFWHO, "%s :End of /WHO list.", "315" },
 /* 316 */
-  { RPL_GODMODE, "%s :Mode dieu ACTIF ! (Mode +Z)", "316" },
+  { RPL_GODMODE, "%s :God mode ACTIVE! (Mode +Z)", "316" },
 /* 317 */
   { RPL_WHOISIDLE, "%s %ld %ld :seconds idle, signon time", "317" },
 /* 318 */
@@ -671,7 +671,7 @@ static Numeric replyTable[] = {
 /* 319 */
   { RPL_WHOISCHANNELS, "%s :%s", "319" },
 /* 320 */
-  { RPL_WHOISCRYPT, "%s :Protection hostname activée", "320" },
+  { RPL_WHOISCRYPT, "%s :Hostname protection enabled", "320" },
 /* 321 */
   { RPL_LISTSTART, "Channel :Users  Name", "321" },
 /* 322 */
@@ -685,13 +685,13 @@ static Numeric replyTable[] = {
 /* 326 */
   { RPL_MODES, "%s :mode(s) : +%s", "326" },
 /* 327 */
-  { RPL_HELPER, "Vous êtes maintenant un agent d'aide du réseau", "327" },
+  { RPL_HELPER, "You are now a network help agent", "327" },
 /* 328 */
   { 0 },
 /* 329 */
   { RPL_CREATIONTIME, "%s %Tu", "329" },
 /* 330 */
-  { RPL_WHOISACCOUNT, "%s %s :%s is logged in as", "330" },
+  { RPL_WHOISACCOUNT, "%s %s :is logged in as", "330" },
 /* 331 */
   { RPL_NOTOPIC, "%s :No topic is set.", "331" },
 /* 332 */
@@ -701,11 +701,11 @@ static Numeric replyTable[] = {
 /* 334 */
   { RPL_LISTUSAGE, ":%s", "334" },
 /* 335 */
-  { RPL_PACCOUNLY, "%s :accepte seulement les messages des utilisateurs enregistrés", "335" },
+  { RPL_PACCOUNLY, "%s :only accepts messages from registered users", "335" },
 /* 336 */
-  { RPL_NOPV, "%s :n'accepte pas les messages privés", "336" },
+  { RPL_NOPV, "%s :do not accept private messages", "336" },
 /* 337 */
-  { RPL_WHOISSSL, "%s :est connecté par SSL", "337" },
+  { RPL_WHOISSSL, "%s :is connected with an SSL connection", "337" },
 /* 338 */
   { RPL_WHOISACTUALLY, "%s %s@%s %s :Actual user@host, Actual IP", "338" },
 /* 339 */
@@ -789,7 +789,7 @@ static Numeric replyTable[] = {
 /* 378 */
   { 0 },
 /* 379 */
-  { RPL_WHOISHIDING, "%s :utilise le mode +X (invisibilité totale)", "379" },
+  { RPL_WHOISHIDING, "%s :sets mode +X (total invisibility)", "379" },
 /* 380 */
   { 0 },
 /* 381 */
@@ -811,7 +811,7 @@ static Numeric replyTable[] = {
 /* 389 */
   { 0 },
 /* 390 */
-  { RPL_SEXE, "%s :est un%s %s", "390" },
+  { RPL_SEXE, "%s :is a %s", "390" },
 /* 391 */
   { RPL_TIME, "%s %Tu %ld :%s", "391" },
 /* 392 */
@@ -825,11 +825,11 @@ static Numeric replyTable[] = {
 /* 396 */
   { RPL_HOSTHIDDEN, "%s.%s is now your hostname", "396" },
 /* 397 */
-  { RPL_SVSHOST, "%s est maintenant votre hostname", "397" },
+  { RPL_SVSHOST, "%s is now your hostname", "397" },
 /* 398 */
   { RPL_STATSSLINE, "%d %s %s %s %s", "398" },
 /* 399 */
-  { RPL_USINGSLINE, ":*** Vous utilisez une S-line", "399" },
+  { RPL_USINGSLINE, ":*** You are using an S-line", "399" },
 /* 400 */
   { ERR_FIRSTERROR, "", "400" },
 /* 401 */
